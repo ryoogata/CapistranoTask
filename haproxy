@@ -1,0 +1,76 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+#############################################################################
+## ROLES.
+role :server, 'ec2-184-169-229-17.us-west-1.compute.amazonaws.com'
+
+set :user, 'ec2-user'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "Initalize bash configuration ( put .inputrc )"
+task :bash_conf do
+	put unindent(<<-'CONF'), '/tmp/.inputrc'
+		Control-p: history-search-backward
+		set show-all-if-ambiguous on
+	CONF
+	run 'sudo cp /tmp/.inputrc /root'
+end
+
+desc "Install haproxy in Amazon Linux AMI"
+task :haproxy_install do
+	run 'sudo yum -y install pcre-devel rpmdevtools gcc make rpm-devel'
+	run 'sudo wget -P /usr/src/rpm/SOURCES http://haproxy.1wt.eu/download/1.4/src/haproxy-1.4.21.tar.gz'
+	run 'sudo tar xzf /usr/src/rpm/SOURCES/haproxy-1.4.21.tar.gz -C /usr/src/rpm/SOURCES'
+	run 'sudo mkdir /usr/src/rpm/SPECS'
+	run 'sudo cp /usr/src/rpm/SOURCES/haproxy-1.4.21/examples/haproxy.spec /usr/src/rpm/SPECS/' 
+	run 'sudo rpmbuild -bb /usr/src/rpm/SPECS/haproxy.spec'
+	run 'sudo rpm -ivh /usr/src/rpm/RPMS/x86_64/haproxy-debuginfo-1.4.21-1.x86_64.rpm /usr/src/rpm/RPMS/x86_64/haproxy-1.4.21-1.x86_64.rpm'
+end
+
+desc "yum update"
+task :yum_update do
+	run 'sudo yum update -y'
+end
+
+desc "Install Apache"
+task :install_apache do
+  run 'sudo yum -y install httpd httpd-devel'
+end
+
+desc "Install mod_rpaf"
+task :mod_rpaf_install do
+	LB_IPADDRESS = '192.168.0.254'
+	run 'sudo yum -y install make gcc httpd-devel'
+	run 'cd /tmp ; wget http://stderr.net/apache/rpaf/download/mod_rpaf-0.6.tar.gz'
+	run 'cd /tmp ; tar xzf mod_rpaf-0.6.tar.gz'
+	run "cd /tmp/mod_rpaf-0.6 ; sed -i \'s%APXS2=\$(shell which apxs2)%APXS2=\/usr\/sbin\/apxs%\' Makefile"
+	run 'cd /tmp/mod_rpaf-0.6 ; make rpaf-2.0'
+	run 'cd /tmp/mod_rpaf-0.6 ; sudo make install-2.0'
+    put unindent(<<-CONF), "/tmp/mod_rpaf.conf"
+		LoadModule rpaf_module modules/mod_rpaf-2.0.so
+		RPAFenable On
+		RPAFsethostname Off
+		RPAFproxy_ips #{LB_IPADDRESS} 
+    CONF
+	run 'sudo mv /tmp/mod_rpaf.conf /etc/httpd/conf.d/'
+	run 'sudo /etc/init.d/httpd restart'
+end
+
+before :mod_rpaf_install, :install_apache
