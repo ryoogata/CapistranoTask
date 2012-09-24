@@ -32,6 +32,7 @@ task :bash_conf do
 	CONF
 	run 'sudo cp /tmp/.inputrc /root'
 end
+
 desc "install movabletype"
 task :install_mt do
 	run 'sudo yum -y install httpd mysql-server gcc make'
