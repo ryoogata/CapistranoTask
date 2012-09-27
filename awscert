@@ -1,0 +1,46 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+#############################################################################
+## ROLES.
+role :server, 'ec2-184-169-238-224.us-west-1.compute.amazonaws.com'
+
+set :user, 'ec2-user'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "Install CERT & PRIVATE_KEY"
+task :pem_install do
+	put unindent(<<-'CERT'), '/tmp/cert-YNIDTGVMVCDA63POF4VMWELVLRVN4LYW.pem'
+		-----BEGIN CERTIFICATE-----
+
+		-----END CERTIFICATE-----
+	CERT
+	run 'sudo cp /tmp/cert-YNIDTGVMVCDA63POF4VMWELVLRVN4LYW.pem /root'
+	run 'sudo rm -rf /tmp/cert-YNIDTGVMVCDA63POF4VMWELVLRVN4LYW.pem'
+	put unindent(<<-'PRIVATE_KEY'), '/tmp/pk-YNIDTGVMVCDA63POF4VMWELVLRVN4LYW.pem'
+		-----BEGIN PRIVATE KEY-----
+
+		-----END PRIVATE KEY-----
+	PRIVATE_KEY
+	run 'sudo cp /tmp/pk-YNIDTGVMVCDA63POF4VMWELVLRVN4LYW.pem /root'
+	run 'sudo rm -rf /tmp/pk-YNIDTGVMVCDA63POF4VMWELVLRVN4LYW.pem'
+	run 'echo EC2_PRIVATE_KEY=/root/pk-YNIDTGVMVCDA63POF4VMWELVLRVN4LYW.pem | sudo tee -a /root/.bash_profile'
+	run 'echo EC2_CERT=/root/cert-YNIDTGVMVCDA63POF4VMWELVLRVN4LYW.pem | sudo tee -a /root/.bash_profile'
+	run 'echo export EC2_PRIVATE_KEY EC2_CERT | sudo tee -a /root/.bash_profile'
+end

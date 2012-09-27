@@ -1,0 +1,302 @@
+#!/usr/bin/ruby 
+
+#############################################################################
+## Utilities.
+def unindent(s) 
+  return s.gsub(/^\s+/, '')
+end
+
+
+#############################################################################
+## Settins: FQDN, etc.
+load 'config.rb'
+
+
+#############################################################################
+## ROLES.
+role :chefserv, CHEF_SERVER_FQDN
+
+
+#############################################################################
+## TASKS.
+
+
+task :set_hostname do 
+  # ideally, this should be idempotent
+  run <<-CMD
+    perl -pi -e "s/^\s*HOSTNAME=.*/HOSTNAME=$CAPISTRANO:HOST$/" /etc/sysconfig/network
+  CMD
+  run 'hostname $CAPISTRANO:HOST$'
+  # setup /etc/hosts
+  run <<-'CMD'
+    export FHN=`hostname`;
+    export HN=`echo $FHN | cut -f1 -d.`;
+    # remove existing entries
+    perl -ni.bak -e 'print unless /^[^#].*\s$ENV{HN}\s/' /etc/hosts &&
+    # add a new one based on the internal interface
+    LC_ALL=C ifconfig eth0 | 
+      perl -ne 'print "$1 $ENV{FHN} $ENV{HN}\n" if /inet addr:([^\s]+)\s/' >>
+        /etc/hosts
+  CMD
+end
+
+after :set_hostname do
+  # this is a test.
+  run 'hostname -s'
+end
+
+
+task :setup_epel do 
+  rpm = 'rpm -Uv'
+  run <<-CMD
+    (rpm -e epel-release; rpm -e elff-release);
+    #{rpm} http://download.fedora.redhat.com/pub/epel/5/x86_64/epel-release-5-4.noarch.rpm &&
+    #{rpm} http://download.elff.bravenet.com/5/x86_64/elff-release-5-3.noarch.rpm
+  CMD
+end
+
+task :setup_rpmforge do
+  rpm = 'rpmforge-release-0.5.1-1.el5.rf.x86_64.rpm'
+  url = "http://packages.sw.be/rpmforge-release/#{rpm}"
+  run <<-CMD
+    rpm -e rpmforge-release;
+    wget -c #{url} &&
+    rpm -Uvh #{rpm}
+  CMD
+end
+
+task :install_packages do
+  run <<-CMD
+    yum install -q -y \
+      ntp \
+      vim-enhanced emacs \
+      screen byobu \
+      expect \
+      nmap tcpdump tcptrace nc 
+  CMD
+end
+
+before :install_packages, :setup_epel, :setup_rpmforge
+
+task :configure_ntp do
+  transaction do
+    put unindent(<<-'CONF'), '/etc/ntp.conf' 
+      restrict default kod nomodify notrap nopeer noquery
+      restrict -6 default kod nomodify notrap nopeer noquery
+      restrict 127.0.0.1 
+      restrict -6 ::1
+      server ntp.nict.jp
+      server ntp.nict.jp
+      server ntp.nict.jp
+      server  127.127.1.0 # local clock
+      fudge 127.127.1.0 stratum 10  
+      driftfile /var/lib/ntp/drift
+      keys /etc/ntp/keys
+    CONF
+    run 'chkconfig ntpd on'
+    run 'service ntpd restart'
+  end 
+end
+
+task :is_ntpd_runnnig do
+  run 'service ntpd status', :env => { :LC_ALL => 'C' }
+end
+
+task :configure_syslog do
+  transaction do
+    run <<-CMD, roles => [:demosrv]
+      perl -pi'*.orig' -e \
+          's/^\s*SYSLOGD_OPTIONS=.*/SYSLOGD_OPTIONS="-r -m 0"/' \
+          /etc/sysconfig/syslog
+    CMD
+    run 'service syslog restart'
+  end
+end
+
+task :configure_cron  do
+  subst = 's!^\s*([^#].*)\s+(root\s+run-parts\s+/etc/cron.daily)!20 5 * * * $2!'
+  run <<-CMD
+    perl -pi -e '#{subst}' /etc/crontab
+  CMD
+end
+
+task :configure_logrotate do
+  subst = 's/^\s*#\s*compress\s*/compress/'
+  run <<-CMD
+    perl -pi -e '#{subst}' /etc/logrotate.conf
+  CMD
+  run <<-'CMD'
+    egrep '^\s*compress\b' /etc/logrotate.conf || 
+      echo compress >> /etc/logrotate.conf
+  CMD
+end
+
+def escape_single_quote(s)
+   return s.gsub(/'/, "\\\\'")
+end
+
+
+desc "FULL PROVISION: Install, setup, enable and start a chef server on #{CHEF_SERVER_FQDN}"
+task :provision  do
+  transaction do
+    install_packages
+    configure_ntp
+    configure_syslog
+    configure_logrotate
+    configure_cron
+  end
+end
+
+
+task :install_chef_gem, :roles => [:chefserv] do
+  run 'gem install chef --version "< 0.10.0" '
+  run 'gem install rack --version "<=  1.2.0" ' # v1.2.1 has a bug
+  #run 'gem uninstall rack --version "> 1.2.0" ' # unnecessary ?
+end
+
+before :provision, :set_hostname
+after :provision, :setup_chef_server
+
+desc "Install, setup, enable and start a chef server on #{CHEF_SERVER_FQDN}"
+task :setup_chef_server, :roles => :chefserv do
+  run 'mkdir -p /etc/chef'
+  # all conf files.
+  Dir.glob("etc/chef/*") do |conffile|
+    upload conffile, "/#{conffile}"
+  end
+end
+
+task :setup_dirs_and_perms do
+  # Permissions
+  chef_dirs = %w[cache log run lib].map { |d| "/var/#{d}/chef" }
+  run 'id chef || adduser chef'
+  run "mkdir -p #{chef_dirs.join ' '}"
+  run "chown chef:chef #{chef_dirs.join ' '} -R"
+end
+
+before :setup_chef_server,
+    :install_chef_gem,
+    :install_couchdb,
+    :install_rabbitmq,
+    :install_java,
+    :install_zlib_and_libxml,
+    :install_chef_server,
+    :setup_dirs_and_perms,
+    :configure_chef_logrotate
+
+after :setup_chef_server do
+  setup_init_scripts
+  chef_http
+  cmd = 'if selinuxenabled; then setsebool httpd_can_network_connect 1; fi'
+  run cmd
+  run "grep '^#{cmd}' /etc/rc.local || echo '#{cmd}' >> /etc/rc.local"
+  enable_and_start_services
+end
+
+task :enable_and_start_services do
+  services = %w[
+    chef-solr-indexer
+    chef-solr
+    chef-server
+  ]
+  services.each do |service|
+    run <<-CMD
+      chkconfig --add #{service} &&
+      chkconfig #{service} on &&
+      service #{service} start
+    CMD
+  end
+end
+
+task :configure_chef_logrotate do
+  %w( server-webui server
+      solr-indexer solr ).each do |service| 
+    put unindent(<<-LOGROTATE), "/etc/logrotate.d/chef-#{service}"
+      /var/log/chef/#{service}.log { 
+          missingok 
+          copytruncate 
+      } 
+    LOGROTATE
+  end
+end 
+
+
+task :install_chef_server do
+  run 'gem install   libxml-ruby --version "1.1.3" '
+  run 'gem install chef-server chef-server-api chef-solr chef-server-webui --version "< 0.10.0"'
+end
+
+task :setup_init_scripts do
+  path = '/etc/init.d/'
+  Dir.glob ".#{path}/*" do |script|
+    upload script, "/#{script}", :mode => 'u+x'
+  end
+end
+
+task :install_zlib_and_libxml do
+  packages = %w[
+    libxml2-devel zlib-devel
+    libxml2 zlib
+  ].map {|p| "#{p}.x86_64"}
+  run "yum -y install #{packages.join(' ')}"
+end
+
+task :install_couchdb do
+  run 'service couchdb stop > /dev/null || true' # restart does not behave for some reason
+  run 'yum -q -y install couchdb'
+  run 'chkconfig couchdb on'
+  # pity: we need nohup here, or else this hangs.
+  run '(nohup service couchdb start > /dev/null ) && echo couchdb started', 
+      :pty => true, :shell => '/bin/bash'
+end
+
+task :install_rabbitmq, :roles => :chefserv do
+  run 'yum -q -y install rabbitmq-server'
+  run 'chkconfig rabbitmq-server on'
+  run '(nohup service rabbitmq-server restart) && echo rabbitmq started',
+      :pty => true, :shell => '/bin/bash'
+end
+
+after :install_rabbitmq do
+  run <<-CMD, roles => :chefserv
+    ( rabbitmqctl list_vhosts | grep '/chef' ||  rabbitmqctl add_vhost /chef ) &&
+    ( rabbitmqctl list_users | grep 'chef' || rabbitmqctl add_user chef testing ) &&
+    rabbitmqctl set_permissions -p /chef chef ".*" ".*" ".*"
+  CMD
+end
+
+task :install_java do
+  run 'yum -q -y install java'
+end
+
+task :chef_http, :roles => :chefserv do
+  run <<-CMD
+    yum -q -y install httpd mod_ssl
+  CMD
+  put <<-CONF, '/etc/httpd/conf.d/chef-server.conf'
+   <VirtualHost *:80>
+    ServerName #{CHEF_SERVER_FQDN}
+    DocumentRoot /var/www/html
+
+    <Proxy balancer://chef_server>
+      BalancerMember http://127.0.0.1:4000
+      Order deny,allow
+      Allow from all
+    </Proxy>
+
+    LogLevel info
+    ErrorLog /var/log/httpd/chef_server-error.log
+    CustomLog /var/log/httpd/chef_server-access.log combined
+
+    RewriteEngine On
+    RewriteCond %{DOCUMENT_ROOT}/%{REQUEST_FILENAME} !-f
+    RewriteCond %{DOCUMENT_ROOT}/%{REQUEST_FILENAME} !-d
+    RewriteRule ^/(.*)$ balancer://chef_server%{REQUEST_URI} [P,QSA,L]
+   </VirtualHost>
+  CONF
+  run 'chkconfig httpd on'
+  run 'service httpd restart'
+end
+
+# vim: ft=ruby:ts=2:sw=2:softtabstop=2:expandtab:
+

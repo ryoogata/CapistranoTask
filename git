@@ -1,0 +1,45 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+#############################################################################
+## ROLES.
+role :server, 'ec2-184-169-229-17.us-west-1.compute.amazonaws.com'
+
+set :user, 'ec2-user'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "install git Server"
+task :install_gitserver do
+	run 'sudo yum -y install git-core git-daemon'
+	run 'sudo sed -i "s/yes/no/" /etc/xinetd.d/git'
+	run 'sudo sed -i "s/verbose/verbose --enable=receive-pack/" /etc/xinetd.d/git'
+	run 'sudo /etc/init.d/xinetd start'
+end
+
+desc "setup git repository"
+task :install_repo do
+	repo = 'source'
+	run <<-CMD
+		sudo mkdir /var/lib/git/#{repo}.git &&
+		cd /var/lib/git/#{repo}.git &&
+		sudo git --bare init /var/lib/git/#{repo}.git &&
+		sudo chmod 777 /var/lib/git/#{repo}.git/objects &&
+		sudo chmod 777 /var/lib/git/#{repo}.git/refs/heads
+	CMD
+end

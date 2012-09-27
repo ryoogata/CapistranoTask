@@ -1,0 +1,61 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+#############################################################################
+## ROLES.
+role :server, 'ec2-184-169-220-237.us-west-1.compute.amazonaws.com'
+
+set :user, 'ec2-user'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "Initalize bash configuration ( put .inputrc )"
+task :bash_conf do
+	put unindent(<<-'CONF'), '/tmp/.inputrc'
+		Control-p: history-search-backward
+		set show-all-if-ambiguous on
+	CONF
+	run 'sudo cp /tmp/.inputrc /root'
+end
+
+desc "yum update"
+task :yum_update do
+	run 'sudo yum update -y'
+end
+
+desc "install NFS Server"
+task :install_nfsserver do
+	run 'sudo yum -y install nfs-utils'
+	run 'sudo mkdir /export'
+	put unindent(<<-'CONF'), '/tmp/exports'
+		/export *(rw,async,no_root_squash)
+	CONF
+	run 'sudo cp /tmp/exports /etc'
+	run 'sudo /etc/init.d/rpcbind start'
+	run 'sudo /etc/init.d/nfs start'
+end
+
+desc "setup NFS Client"
+task :setup_nfsclient do
+	run 'sudo yum -y install rpcbind nfs-utils'
+end
+
+desc "Install Apache"
+task :install_apache do
+  run 'sudo yum -y install httpd httpd-devel'
+end

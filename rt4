@@ -1,0 +1,239 @@
+#############################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+end
+
+#############################################################################
+## ROLES.
+#role :server, '10.0.1.19'
+role :server, '124.147.9.181'
+
+set :user, 'root'
+set :password, 'dDEcScYN5Q'
+
+
+#############################################################################
+## TASKS.
+
+task :rt4_permission do
+   run 'chmod -R u+rwX,go-w,go+rX /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
+   run 'chown -R root /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
+   run 'chgrp -R bin /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
+   run 'chmod 0770 /opt/rt4/var/mason_data /opt/rt4/var/session_data'
+   run 'chown -R apache /opt/rt4/var/mason_data /opt/rt4/var/session_data'
+   run 'chgrp -R apache /opt/rt4/var/mason_data /opt/rt4/var/session_data'
+end
+
+task :rt4_install do
+   run 'cd /usr/local/src ; wget http://download.bestpractical.com/pub/rt/release/rt-4.0.6.tar.gz ; tar xzpvf rt-4.0.6.tar.gz'
+   run 'cd /usr/local/src/rt-4.0.6 ; sh configure ; make install'
+   run 'chmod -R u+rwX,go-w,go+rX /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
+   run 'chown -R root /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
+   run 'chgrp -R bin /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
+   run 'chmod 0770 /opt/rt4/var/mason_data /opt/rt4/var/session_data'
+   run 'chown -R apache /opt/rt4/var/mason_data /opt/rt4/var/session_data'
+   run 'chgrp -R apache /opt/rt4/var/mason_data /opt/rt4/var/session_data'
+   run 'cd /usr/local/src/rt-4.0.6 ; echo | make initialize-database'
+end
+
+desc "Initalize bash configuration ( put .inputrc )"
+task :bash_conf do
+  put unindent(<<-'CONF'), '/root/.inputrc'
+   Control-p: history-search-backward
+   set show-all-if-ambiguous on
+  CONF
+end
+
+desc "SELinux Disable"
+task :selinux_disable do
+  run 'sed -i "s/SELINUX=enforcing/SELINUX=disabled/" /etc/sysconfig/selinux'
+  run 'setenforce 0'
+end
+
+desc "Setup CentOS epel Repository ( x86_64 )"
+task :setup_epel do
+  rpm = 'rpm -Uv'
+  run <<-CMD
+    #{rpm} http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm
+  CMD
+end
+
+desc "Setup CentOS rpmforge Repository ( x86_64 )"
+task :setup_rpmforge do
+  rpm = 'rpm -Uv'
+  run <<-CMD
+    #{rpm} http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm
+  CMD
+end
+
+desc "yum update"
+task :yum_update do
+  run <<-CMD
+    yum update -y
+  CMD
+end
+
+before :yum_update, :setup_rpmforge, :setup_epel
+
+desc "Install Basic Packages"
+task :install_basic_packages do
+  run <<-CMD
+    yum install -y \
+      setuptool system-config-firewall-tui system-config-network-tui ntsysv man \
+      tcpdump wget ntp
+  CMD
+end
+
+desc "Install Ruby Develop Packages"
+task :install_RubyDev_packages do
+  run <<-CMD
+    yum install -y \
+      ruby ruby-devel ruby-ri ruby-rdoc ruby-shadow gcc gcc-c++ automake autoconf make curl dmidecode 
+  CMD
+end
+
+desc "Install ruybgems"
+task :install_rubygems do
+  run <<-CMD
+    yum install -y rubygems
+  CMD
+end
+
+desc "Install PreRequire RT 4 Package install"
+task :install_preRTpackage do
+  run <<-CMD
+    yum install -y \
+      perl perl-CPAN \
+      cpp gcc* autoconf* automake* libtool m4 make \
+      gd gd-devel libpng libpng-devel libjpeg libjpeg-devel freetype freetype-devel
+  CMD
+end
+
+desc "Install MySQL Server"
+task :install_mysql do
+  run 'yum -y install mysql-server'
+  run 'chkconfig mysqld on'
+  run 'service mysqld start'
+end
+
+desc "Install RT 4 Package install"
+task :install_RTpackage do
+  run 'yum -y install perl-CSS-*' 
+  run 'yum -y install perl-MIME-Types'
+  run 'yum -y install perl-Text*'
+  run 'yum -y install perl-XML-RSS'
+  run 'yum -y install perl-MIME-tools'
+  run 'yum -y install perl-GD'
+  run 'yum -y install perl-GDGraph'
+  run 'yum -y install perl-CGI*'
+  run 'yum -y install perl-TermReadKey'
+  run 'yum -y install perl-Time-modules'
+  run 'yum -y install perl-Class-ReturnValue'
+  run 'yum -y install perl-Text-Quoted'
+  run 'yum -y install perl-Module-Versions-Report'
+  run 'yum -y install perl-Apache-Session-Wrapper'
+  run 'yum -y install perl-Cache-Simple-TimedExpiry'
+  run 'yum -y install perl-Calendar-Simple'
+  run 'yum -y install perl-HTML-Scrubber'
+  run 'yum -y install perl-HTML-Tree'
+  run 'yum -y install perl-HTML-Format'
+  run 'yum -y --enablerepo=rpmforge-extras install perl-Class-Accessor'
+  run 'yum -y --enablerepo=rpmforge-extras install perl-Plack'
+  run 'yum -y install perl-Regexp*'
+  run 'yum -y install perl-Net-Server'
+  run 'yum -y install perl-PerlIO-eol'
+  run 'yum -y install perl-Locale-Maketext-Fuzzy perl-Locale-Maketext-Lexicon'
+  run 'yum -y install perl-HTTP-Server-Simple'
+  run 'yum -y install perl-HTTP-Server-Simple-Mason'
+  run 'yum -y install perl-File-ShareDir'
+  run 'yum -y install perl-Email-Address'
+  run 'yum -y install perl-DBIx-SearchBuilder'
+  run 'yum -y install perl-Moose'
+  run 'yum -y install perl-Data-ICal'
+  run 'yum -y install perl-Log-Dispatch'
+  run 'yum -y install perl-Tree-Simple'
+  run 'yum -y install fcgi-perl'
+  run 'yum -y install perl-IPC-Run3'
+  run 'yum -y install perl-GnuPG-Interface'
+  run 'yum -y install perl-FCGI*'
+  run 'yum -y install perl-JSON*'
+  run 'yum -y install perl-Net-CIDR'
+  run 'yes | cpan CGI::PSGI'
+  run 'yes | cpan Encode'
+  run 'yes | cpan HTML::RewriteAttributes'
+  run 'yes | cpan URI'
+  run 'yes | cpan HTML::Mason'
+  run 'yes | cpan HTML::Mason::PSGIHandler'
+  run 'yes | cpan Plack::Handler::Starlet'
+  run 'yes | cpan Convert::Color'
+  run 'yes | cpan Regexp::IPv6'
+  run 'yes | cpan HTML::Quoted'
+  run 'yes | cpan DBIx::SearchBuilder'
+end
+
+desc "Install Apache"
+task :install_apache do
+  run 'yum -y install httpd httpd-devel'
+end
+
+task :fastcgi do
+  put unindent(<<-'CONF'), '/etc/httpd/conf.d/fastcgi.conf'
+    LoadModule fastcgi_module /usr/lib64/httpd/modules/mod_fastcgi.so
+    FastCgiServer /opt/rt4/sbin/rt-server.fcgi -processes 5 -idle-timeout 300
+  CONF
+end
+
+task :rt_http do
+  put unindent(<<-'CONF'), '/etc/httpd/conf.d/rt.conf'
+    <VirtualHost *:80>
+    ### Optional apache logs for RT
+    # Ensure that your log rotation scripts know about these files
+    # ErrorLog /opt/rt4/var/log/apache2.error
+    # TransferLog /opt/rt4/var/log/apache2.access
+    # LogLevel debug
+
+    AddDefaultCharset UTF-8
+
+    Alias /NoAuth/images/ /opt/rt4/share/html/NoAuth/images/
+    ScriptAlias / /opt/rt4/sbin/rt-server.fcgi/
+
+    DocumentRoot "/opt/rt4/share/html"
+     <Location />
+        Order allow,deny
+        Allow from all
+
+        Options +ExecCGI
+        AddHandler fastcgi-script fcgi
+     </Location>
+    </VirtualHost>
+  CONF
+end
+
+desc "Setup NTPD"
+task :ntpd_config do
+  run 'chkconfig ntpd on'
+  run 'service ntpd start'
+end
+
+desc "Install Chef"
+task :install_chef do
+  run 'gem install chef --no-ri --no-rdoc'
+end
+
+before :install_chef, :install_RubyDev_packages, :install_rubygems
+
+desc ""
+task :provision do
+  transaction do
+   setup_epel
+   setup_rpmforge
+   yum_update
+   install_basic_packages
+   selinux_disable
+   install_rubygems
+   install_chef
+   ntpd_config
+   bash_conf
+  end
+end
