@@ -1,0 +1,56 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+#############################################################################
+## ROLES.
+role :server, 'ec2-184-169-238-224.us-west-1.compute.amazonaws.com'
+
+set :user, 'ec2-user'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "Initalize bash configuration ( put .inputrc )"
+task :bash_conf do
+	put unindent(<<-'CONF'), '/tmp/.inputrc'
+		Control-p: history-search-backward
+		set show-all-if-ambiguous on
+	CONF
+	run 'sudo cp /tmp/.inputrc /root'
+end
+
+desc "install movabletype"
+task :install_mt do
+	run 'sudo yum -y install httpd mysql-server gcc make'
+	run 'sudo yum -y install perl-DBI perl-DBD-MySQL perl-Archive-Zip perl-Crypt-SSLeay perl-Cache-Memcached perl-GD perl-XML-Parser perl-Mail-Sendmail perl-Archive-Tar perl-CPAN perl-YAML perl-Image-Size'
+	run 'sudo yes | sudo cpan Crypt::DSA'
+	run 'sudo yes | sudo cpan IPC::Run'
+	run 'sudo yes | sudo cpan Cache::File'
+	run 'sudo yes | sudo cpan Imager'
+	run 'sudo /etc/init.d/mysqld start'
+	run 'sudo mysqladmin -u root create mt'
+	run 'sudo chmod 777 /var/www/html'
+	run 'sudo wget -P /root http://www.movabletype.org/downloads/stable/MTOS-5.14-ja.zip'
+	run 'sudo unzip /root/MTOS-5.14-ja.zip -d /root'
+	run 'sudo cp -R /root/MTOS-5.14-ja/mt-static /var/www/html/mt-static'
+	run 'sudo cp -R /root/MTOS-5.14-ja /var/www/cgi-bin'
+	run 'sudo mv /var/www/cgi-bin/MTOS-5.14-ja /var/www/cgi-bin/mt'
+	run 'sudo chmod 777 /var/www/cgi-bin/mt/'
+	run 'sudo rm -rf /var/www/cgi-bin/mt/mt-static'
+	run 'sudo chmod 777 /var/www/html/mt-static/support'
+	run 'sudo /etc/init.d/httpd start'
+end
