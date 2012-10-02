@@ -1,0 +1,51 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+#############################################################################
+## ROLES.
+role :server, ''
+
+set :user, 'ec2-user'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "install calibre Server"
+task :install_calibre do
+	username = 'user'
+	password = 'PASS'
+	run 'sudo yum -y install glibc'
+	put unindent(<<-'REPO'), '/tmp/CentOS-Base.repo'
+		[base]
+		name=CentOS-6 - Base
+		mirrorlist=http://mirrorlist.centos.org/?release=6&arch=x86_64&repo=os
+		enabled=0
+		gpgcheck=1
+		gpgkey=http://mirror.centos.org/centos/RPM-GPG-KEY-CentOS-6
+	REPO
+	run 'sudo cp /tmp/CentOS-Base.repo /etc/yum.repos.d/'
+	run 'sudo yum -y install --enablerepo=base xdg-utils'
+	run 'sudo yum -y install ImageMagick'
+	run 'sudo yum -y install python-imaging'
+	run 'sudo yum -y install  python-dateutil'
+	run 'sudo yum -y install --enablerepo=base python-lxml'
+	run 'sudo yum -y install --enablerepo=base qt qt-devel qt-doc PyQt4 PyQt4-devel'
+	run <<-CMD
+		echo | sudo python -c "import sys; py3 = sys.version_info[0] > 2; u = __import__('urllib.request' if py3 else 'urllib', fromlist=1); exec(u.urlopen('http://status.calibre-ebook.com/linux_installer').read()); main(install_dir='/opt')" &&
+		sudo /opt/calibre/calibre-server --with-library /opt/calibre/lib/ --port=80 --username=#{username} --password=#{password} --daemonize
+	CMD
+end
