@@ -6,7 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
-role :server, 'ec2-50-18-68-191.us-west-1.compute.amazonaws.com'
+role :server, ''
 
 set :user, 'ec2-user'
 set :sudo_password, ''
@@ -22,6 +22,15 @@ set :use_sudo, true
 ## TASKS.
 task :whoami do
 	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "Initalize bash configuration ( put .inputrc )"
+task :bash_conf do
+    put unindent(<<-'CONF'), '/tmp/.inputrc'
+        Control-p: history-search-backward
+        set show-all-if-ambiguous on
+    CONF
+    run 'sudo cp /tmp/.inputrc /root'
 end
 
 desc "install chef-solor in Amazon Linux AMI"
