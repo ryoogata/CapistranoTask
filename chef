@@ -6,7 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
-role :server, ''
+role :server, 'ec2-54-241-122-131.us-west-1.compute.amazonaws.com'
 
 set :user, 'ec2-user'
 set :sudo_password, ''
@@ -35,17 +35,28 @@ end
 
 desc "install chef-solor in Amazon Linux AMI"
 task :install_chefsolo do
+	# Attribute の設定
 	FILE_CACHE_PATH = '/tmp'
 	COOKBOOK_PATH ='/root/chef-solo/cookbooks'
+
+	# 必要なディレクトリの作成
 	run 'sudo mkdir /etc/chef'
-	run 'sudo yum -y install git rubygems ruby ruby-devel ruby-ri ruby-rdoc ruby-shadow gcc gcc-c++ automake autoconf make curl dmidecode libxml2-devel libxslt-devel'
-	run 'sudo gem install chef --no-ri --no-rdoc'
+	run <<-CMD
+		sudo mkdir -p #{COOKBOOK_PATH}
+	CMD
+
+	# 設定ファイルの準備
 	put unindent(<<-CONF), "/tmp/solo.rb"
 		file_cache_path "#{FILE_CACHE_PATH}"
 		cookbook_path "#{COOKBOOK_PATH}"
 	CONF
 	run 'sudo mv /tmp/solo.rb /etc/chef'
-	run <<-CMD
-		sudo mkdir -p #{COOKBOOK_PATH}
-	CMD
+
+	# アプリケーションのインストール
+	run 'sudo yum -y install git rubygems ruby ruby-devel ruby-ri ruby-rdoc ruby-shadow gcc gcc-c++ automake autoconf make curl dmidecode libxml2-devel libxslt-devel'
+	run 'sudo gem install chef --no-ri --no-rdoc'
+	
+	# cookbook の clone
+	run 'cd /tmp && git clone https://github.com/ryoogata/cookbooks.git'
+	run 'sudo cp -R /tmp/cookbooks /root/chef-solo'
 end
