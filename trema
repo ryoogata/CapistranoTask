@@ -6,7 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
-role :server, ''
+role :server, 'ec2-54-241-114-104.us-west-1.compute.amazonaws.com'
 
 set :user, 'ubuntu'
 #set :user, 'root'
@@ -27,11 +27,19 @@ end
 
 desc "Initalize bash configuration ( put .inputrc )"
 task :bash_conf do
+	# root ユーザの為の設定
         put unindent(<<-'CONF'), '/tmp/.inputrc'
                 Control-p: history-search-backward
                 set show-all-if-ambiguous on
         CONF
         run 'sudo cp /tmp/.inputrc /root'
+
+	# Ubuntu の場合の処理
+	if user == 'ubuntu' then
+		run <<-CMD
+			cp /tmp/.inputrc /home/ubuntu	
+		CMD
+	end
 end
 
 desc "install Trema Amazon Ubuntu Server 11.10 "
