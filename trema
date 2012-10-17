@@ -6,7 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
-role :server, 'ec2-184-169-224-102.us-west-1.compute.amazonaws.com'
+role :server, 'ec2-54-241-114-104.us-west-1.compute.amazonaws.com'
 
 set :user, 'ubuntu'
 #set :user, 'root'
@@ -25,6 +25,15 @@ task :whoami do
 	run "#{sudo :as => 'root'} whoami"
 end
 
+desc "Initalize bash configuration ( put .inputrc )"
+task :bash_conf do
+        put unindent(<<-'CONF'), '/tmp/.inputrc'
+                Control-p: history-search-backward
+                set show-all-if-ambiguous on
+        CONF
+        run 'sudo cp /tmp/.inputrc /root'
+end
+
 desc "install Trema Amazon Ubuntu Server 11.10 "
 task :install_trema do
 	run 'sudo apt-get update'
@@ -32,4 +41,5 @@ task :install_trema do
 	run 'git clone git://github.com/trema/trema.git'
 	run '/home/ubuntu/trema/build.rb'
 	run 'sudo gem install gli'
+	run 'cd /home/ubuntu/trema ; git clone https://github.com/ryoogata/TremaSource.git'
 end
