@@ -6,7 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
-role :server, 'ec2-54-241-114-104.us-west-1.compute.amazonaws.com'
+role :server, ''
 
 set :user, 'ubuntu'
 #set :user, 'root'
@@ -36,10 +36,19 @@ end
 
 desc "install Trema Amazon Ubuntu Server 11.10 "
 task :install_trema do
+	# Attribute の設定
+	TREMA_SOURCE_PATH = '/home/ubuntu/trema' # Trema のサンプルコードの clone 先 
+	GIT_URL = 'https://github.com/ryoogata/TremaSource.git' # Git の保存先
+
+	# アプリケーションのインストール
 	run 'sudo apt-get update'
 	run 'sudo apt-get -y install git gcc make ruby ruby-dev irb libpcap-dev libsqlite3-dev rubygems'
 	run 'git clone git://github.com/trema/trema.git'
 	run '/home/ubuntu/trema/build.rb'
 	run 'sudo gem install gli'
-	run 'cd /home/ubuntu/trema ; git clone https://github.com/ryoogata/TremaSource.git'
+
+	# Trema のサンプルコードの clone
+	run <<-CMD
+		cd #{TREMA_SOURCE_PATH} ; git clone #{GIT_URL}
+	CMD
 end
