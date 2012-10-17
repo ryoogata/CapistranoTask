@@ -1,0 +1,34 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+#############################################################################
+## ROLES.
+role :server, ''
+
+set :user, 'ubuntu'
+#set :user, 'root'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "install Floodlight Amazon Ubuntu Server 11.10 "
+task :install_floodligth do
+	run 'sudo apt-get update'
+	run 'sudo apt-get -y install git build-essential default-jdk ant python-dev'
+	run 'git clone git://github.com/floodlight/floodlight.git'
+	run 'cd /home/ubuntu/floodlight ; sudo ant'
+end
