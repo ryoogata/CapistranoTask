@@ -6,7 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
-role :server, ''
+role :server, 'ec2-54-241-115-29.us-west-1.compute.amazonaws.com'
 
 set :user, 'ec2-user'
 set :sudo_password, ''
@@ -26,31 +26,75 @@ end
 
 desc "Initalize bash configuration ( put .inputrc )"
 task :bash_conf do
-	put unindent(<<-'CONF'), '/tmp/.inputrc'
-		Control-p: history-search-backward
-		set show-all-if-ambiguous on
-	CONF
-	run 'sudo cp /tmp/.inputrc /root'
+    # root ユーザの為の設定
+        put unindent(<<-'CONF'), '/tmp/.inputrc'
+                Control-p: history-search-backward
+                set show-all-if-ambiguous on
+        CONF
+        run 'sudo cp /tmp/.inputrc /root'
+
+    # Ubuntu の場合の処理
+    if user == 'ubuntu' then
+        run <<-CMD
+            cp /tmp/.inputrc /home/ubuntu
+        CMD
+    end
 end
+
 
 desc "install movabletype"
 task :install_mt do
+	# Attribute の設定
+	MTOS_SOURCE = 'MTOS-5.14-ja.zip'
+	MTOS_DIRECTORY = MTOS_SOURCE.sub(".zip","")
+
+	# movabletype インストールの事前準備
 	run 'sudo yum -y install httpd mysql-server gcc make'
 	run 'sudo yum -y install perl-DBI perl-DBD-MySQL perl-Archive-Zip perl-Crypt-SSLeay perl-Cache-Memcached perl-GD perl-XML-Parser perl-Mail-Sendmail perl-Archive-Tar perl-CPAN perl-YAML perl-Image-Size'
 	run 'sudo yes | sudo cpan Crypt::DSA'
 	run 'sudo yes | sudo cpan IPC::Run'
 	run 'sudo yes | sudo cpan Cache::File'
 	run 'sudo yes | sudo cpan Imager'
+	
+	# MySQL の起動と Database mt の作成
 	run 'sudo /etc/init.d/mysqld start'
 	run 'sudo mysqladmin -u root create mt'
-	run 'sudo chmod 777 /var/www/html'
-	run 'sudo wget -P /root http://www.movabletype.org/downloads/stable/MTOS-5.14-ja.zip'
-	run 'sudo unzip /root/MTOS-5.14-ja.zip -d /root'
-	run 'sudo cp -R /root/MTOS-5.14-ja/mt-static /var/www/html/mt-static'
-	run 'sudo cp -R /root/MTOS-5.14-ja /var/www/cgi-bin'
-	run 'sudo mv /var/www/cgi-bin/MTOS-5.14-ja /var/www/cgi-bin/mt'
-	run 'sudo chmod 777 /var/www/cgi-bin/mt/'
-	run 'sudo rm -rf /var/www/cgi-bin/mt/mt-static'
-	run 'sudo chmod 777 /var/www/html/mt-static/support'
+
+	# movableype の Download と展開
+	run <<-CMD
+		sudo wget -P /root http://www.movabletype.org/downloads/stable/#{MTOS_SOURCE} &&
+		sudo unzip /root/#{MTOS_SOURCE} -d /root &&
+		sudo chmod 777 /var/www/html
+	CMD
+
+	# /var/www/html/mt-static の準備
+	run <<-CMD
+		sudo cp -R /root/#{MTOS_DIRECTORY}/mt-static /var/www/html/mt-static &&
+		sudo chmod 777 /var/www/html/mt-static/support
+	CMD
+
+	# /var/www/cgi-bin の準備
+	run <<-CMD
+		sudo cp -R /root/#{MTOS_DIRECTORY} /var/www/cgi-bin &&
+		sudo rm -rf /var/www/cgi-bin/mt/mt-static &&
+		sudo mv /var/www/cgi-bin/#{MTOS_DIRECTORY} /var/www/cgi-bin/mt &&
+		sudo chmod 777 /var/www/cgi-bin/mt/ &&
+		sudo chmod 777 /var/www/cgi-bin/mt/mt-static/support &&
+		sudo mkdir /var/www/cgi-bin/mt/mt-static/support/uploads &&
+		sudo chmod 777 /var/www/cgi-bin/mt/mt-static/support/uploads
+	CMD
+
+	# httpd の起動
 	run 'sudo /etc/init.d/httpd start'
+
+	# インストール後, http://<Instance Public DNS>/cgi-bin/mt/mt-wizard.cgi にアクセスして Setup を実行
+	
+	# スタティックウェブパスには http://<Instance Public DNS>/mt-static を入力
+	# スタティックファイルパスは /var/www/cgi-bin/mt/mt-static と Default を入力
+	
+	# データベース設定
+	#   データベースサーバ: localhost
+	#   データベース名: mt
+	#   ユーザ名: root
+	#   パスワード: なし
 end

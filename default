@@ -6,7 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
-role :server, 'ec2-184-169-238-224.us-west-1.compute.amazonaws.com'
+role :server, ''
 
 set :user, 'ec2-user'
 set :sudo_password, ''
@@ -26,9 +26,32 @@ end
 
 desc "Initalize bash configuration ( put .inputrc )"
 task :bash_conf do
-	put unindent(<<-'CONF'), '/tmp/.inputrc'
-		Control-p: history-search-backward
-		set show-all-if-ambiguous on
-	CONF
-	run 'sudo cp /tmp/.inputrc /root'
+    # root ユーザの為の設定
+        put unindent(<<-'CONF'), '/tmp/.inputrc'
+                Control-p: history-search-backward
+                set show-all-if-ambiguous on
+        CONF
+        run 'sudo cp /tmp/.inputrc /root'
+
+    # Ubuntu の場合の処理
+    if user == 'ubuntu' then
+        run <<-CMD
+            cp /tmp/.inputrc /home/ubuntu
+        CMD
+    end
+end
+
+# cap ファイル内のユーザ名を表示する
+task :cat_user do
+        run <<-CMD
+                echo #{user}
+        CMD
+end
+
+task :cat_val do
+        MTOS_SOURCE = 'MTOS-5.14-ja.zip'
+        MTOS = MTOS_SOURCE.delete(".zip")
+        run <<-CMD
+                echo #{MTOS}
+        CMD
 end
