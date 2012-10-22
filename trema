@@ -6,7 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
-role :server, ''
+role :server, 'ec2-204-236-146-97.us-west-1.compute.amazonaws.com'
 
 set :user, 'ubuntu'
 #set :user, 'root'
