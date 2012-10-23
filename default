@@ -55,3 +55,18 @@ task :cat_val do
                 echo #{MTOS}
         CMD
 end
+
+# ファイルが存在しているか否かの確認
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
+
+# remote_file_exists を利用して、Directory の存在確認を行う
+task :mkdir do
+	DIRECTORY = 'mage'
+	unless remote_file_exists?("/tmp/#{DIRECTORY}")
+		run <<-CMD
+			mkdir /tmp/#{DIRECTORY}
+		CMD
+	end
+end
