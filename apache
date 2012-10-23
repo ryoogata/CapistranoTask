@@ -1,0 +1,58 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+#############################################################################
+## ROLES.
+role :server, ''
+
+set :user, 'ec2-user'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+desc "Initalize bash configuration ( put .inputrc )"
+task :bash_conf do
+    # root ユーザの為の設定
+        put unindent(<<-'CONF'), '/tmp/.inputrc'
+                Control-p: history-search-backward
+                set show-all-if-ambiguous on
+        CONF
+        run 'sudo cp /tmp/.inputrc /root'
+
+    # Ubuntu の場合の処理
+    if user == 'ubuntu' then
+        run <<-CMD
+            cp /tmp/.inputrc /home/ubuntu
+        CMD
+    end
+end
+
+namespace :apache do
+	# apache のインストール
+	desc "install apache"
+	task :install do
+		run 'sudo yum -y install httpd httpd-devel gcc'
+	end
+
+	# DDoS 防御の mod_evasiv のインストール
+	desc "install mod_evasive"
+	task :install_mod_evasive do
+		run 'wget -P /tmp http://www.zdziarski.com/blog/wp-content/uploads/2010/02/mod_evasive_1.10.1.tar.gz'
+		run 'cd /tmp ; tar xzpvf mod_evasive_1.10.1.tar.gz'
+		run 'cd /tmp/mod_evasive ; sudo apxs -i -a -c mod_evasive20.c'
+	end
+end
