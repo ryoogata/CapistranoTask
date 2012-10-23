@@ -6,6 +6,7 @@ def unindent(s)
 
 #############################################################################
 ## ROLES.
+
 role :server, ''
 
 set :user, 'ec2-user'
@@ -43,6 +44,10 @@ end
 
 desc "install fswiki"
 task :install_fswiki do
+        # Attribute の設定
+	MAIN_DIRECTORY = '/var/www/cgi-bin/wiki'
+	BACKUP_DIRECTORY ='/opt/wiki'
+
 	# fswiki インストールの事前準備
 	run 'sudo yum -y install httpd perl-CGI'
 	run "sudo wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip'"
@@ -52,40 +57,61 @@ task :install_fswiki do
 	run 'sudo sed -i "/^<Directory \"\/var\/www\/cgi-bin\">/a AddHandler text/css .css " /etc/httpd/conf/httpd.conf' 
 
 	# Default のままで利用する Director の準備
-	run 'sudo mkdir -p /var/www/cgi-bin/wiki'
-	run 'sudo mv /tmp/wiki3_6_4/docs /var/www/cgi-bin/wiki'
-	run 'sudo mv /tmp/wiki3_6_4/lib /var/www/cgi-bin/wiki'
-	run 'sudo mv /tmp/wiki3_6_4/plugin /var/www/cgi-bin/wiki'
-	run 'sudo mv /tmp/wiki3_6_4/theme /var/www/cgi-bin/wiki'
-	run 'sudo mv /tmp/wiki3_6_4/tmpl /var/www/cgi-bin/wiki'
-	run 'sudo mv /tmp/wiki3_6_4/setup.dat /var/www/cgi-bin/wiki'
-	run 'sudo mv /tmp/wiki3_6_4/setup.sh /var/www/cgi-bin/wiki'
-	run 'sudo mv /tmp/wiki3_6_4/wiki.cgi /var/www/cgi-bin/wiki'
+        run <<-CMD
+		sudo mkdir -p #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/docs #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/lib #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/plugin #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/theme #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/tmpl #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/setup.dat #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/setup.sh #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/wiki.cgi #{MAIN_DIRECTORY}
+	CMD
 
 	# Backup 取得用の Directory の準備
-	run 'sudo mkdir /opt/wiki'
-	run 'sudo mkdir /opt/wiki/attach'
-	run 'sudo mkdir /opt/wiki/config'
-	run 'sudo mkdir /opt/wiki/backup'
-	run 'sudo mkdir /opt/wiki/data'
-	run 'sudo mkdir /opt/wiki/log'
-	run 'sudo mkdir /opt/wiki/pdf'
-	run 'sudo mkdir /opt/wiki/plugin' # Default ではない、追加した plugin 用の Directory
-	run 'sudo ln -s /opt/wiki/attach /var/www/cgi-bin/wiki/'
-	run 'sudo ln -s /opt/wiki/backup /var/www/cgi-bin/wiki/'
-	run 'sudo ln -s /opt/wiki/log /var/www/cgi-bin/wiki/'
-	run 'sudo ln -s /opt/wiki/pdf /var/www/cgi-bin/wiki/'
-	run 'sudo ln -s /opt/wiki/config /var/www/cgi-bin/wiki/'
-	run 'sudo mv /tmp/wiki3_6_4/config/* /opt/wiki/config/'
-	run 'sudo ln -s /opt/wiki/data /var/www/cgi-bin/wiki/'
-	run 'sudo mv /tmp/wiki3_6_4/data/* /opt/wiki/data/'
+        run <<-CMD
+		sudo mkdir #{BACKUP_DIRECTORY} &&
+		sudo mkdir #{BACKUP_DIRECTORY}/attach &&
+		sudo mkdir #{BACKUP_DIRECTORY}/config &&
+		sudo mkdir #{BACKUP_DIRECTORY}/backup &&
+		sudo mkdir #{BACKUP_DIRECTORY}/data &&
+		sudo mkdir #{BACKUP_DIRECTORY}/log &&
+		sudo mkdir #{BACKUP_DIRECTORY}/pdf &&
+		sudo mkdir #{BACKUP_DIRECTORY}/plugin && # Default ではない、追加した plugin 用の Directory
+		sudo ln -s #{BACKUP_DIRECTORY}/attach #{MAIN_DIRECTORY} &&
+		sudo ln -s #{BACKUP_DIRECTORY}/backup #{MAIN_DIRECTORY} &&
+		sudo ln -s #{BACKUP_DIRECTORY}/log #{MAIN_DIRECTORY} &&
+		sudo ln -s #{BACKUP_DIRECTORY}/pdf #{MAIN_DIRECTORY} &&
+		sudo ln -s #{BACKUP_DIRECTORY}/config #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/config/* #{BACKUP_DIRECTORY}/config &&
+		sudo ln -s #{BACKUP_DIRECTORY}/data #{MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/data/* #{BACKUP_DIRECTORY}/data/
+	CMD
+
+	# パッチの適用
+        run <<-CMD
+		# patch fswiki-patch-20110813 の適用
+		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Ffswiki-patch-20110813.zip' &&
+		unzip -d /tmp /tmp/fswiki-patch-20110813.zip &&
+		sudo cp /tmp/fswiki-patch-20110813/lib/Util.pm #{MAIN_DIRECTORY}/lib &&
+	
+		# patch fswiki-pache-20110823 の適用
+		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=iij&f=%2Ffswiki%2F48737%2Ffswiki-pache-20110823.zip' &&
+		unzip -d /tmp /tmp/fswiki-pache-20110823.zip &&
+		sudo cp /tmp/fswiki-pache-20110823/lib/Wiki/InterWiki.pm #{MAIN_DIRECTORY}/lib/Wiki/
+	CMD
 
 	# setup スクリプトの実行
-	run 'cd /var/www/cgi-bin/wiki ; sudo ./setup.sh'
+        run <<-CMD
+		cd #{MAIN_DIRECTORY} ; sudo ./setup.sh
+	CMD
 
 	# パーミッションの変更
-	run 'sudo chown -R apache /var/www/cgi-bin/wiki'
-	run 'sudo chown -R apache /opt/wiki/'
+        run <<-CMD
+		sudo chown -R apache #{MAIN_DIRECTORY} &&
+		sudo chown -R apache #{BACKUP_DIRECTORY}
+	CMD
 
 	# httpd の起動
 	run 'sudo /etc/init.d/httpd start'
