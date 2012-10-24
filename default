@@ -4,8 +4,15 @@ def unindent(s)
   return s.gsub(/^\s+/, '')
   end
 
+# ファイルが存在しているか否かの確認
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
+
 #############################################################################
 ## ROLES.
+
+
 role :server, ''
 
 set :user, 'ec2-user'
@@ -41,13 +48,16 @@ task :bash_conf do
     end
 end
 
-# cap ファイル内のユーザ名を表示する
+
+# cap ファイル内のユーザ名 ( set :user ) を表示する
 task :cat_user do
         run <<-CMD
                 echo #{user}
         CMD
 end
 
+
+# MTOS_SOURCE の末尾 .zip を削除した文字列を MTOS へ代入
 task :cat_val do
         MTOS_SOURCE = 'MTOS-5.14-ja.zip'
         MTOS = MTOS_SOURCE.delete(".zip")
@@ -56,12 +66,8 @@ task :cat_val do
         CMD
 end
 
-# ファイルが存在しているか否かの確認
-def remote_file_exists?(full_path)
-  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
-end
 
-# remote_file_exists を利用して、Directory の存在確認を行う
+# remote_file_exists を利用して、Directory が存在していなければ作成 
 task :mkdir do
 	DIRECTORY = 'mage'
 	unless remote_file_exists?("/tmp/#{DIRECTORY}")
@@ -69,4 +75,22 @@ task :mkdir do
 			mkdir /tmp/#{DIRECTORY}
 		CMD
 	end
+end
+
+
+# remote_file_exists を利用して、ファイルが存在していなければ Download して展開 ( unzip -n )
+task :download_unzip do
+        unless remote_file_exists?("/tmp/wiki3_6_4.zip")
+        	run "wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip'"
+	end
+        run 'unzip -n -d /tmp /tmp/wiki3_6_4.zip'
+end
+
+
+# remote_file_exists を利用して、ファイルが存在していなければ Download して展開 ( tar --keep-newer-files )
+task :download_tar do
+        unless remote_file_exists?("/tmp/mod_evasive_1.10.1.tar.gz")
+		run 'wget -P /tmp http://www.zdziarski.com/blog/wp-content/uploads/2010/02/mod_evasive_1.10.1.tar.gz'
+	end
+	run 'cd /tmp ; tar xzf mod_evasive_1.10.1.tar.gz --keep-newer-files'
 end
