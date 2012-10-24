@@ -94,3 +94,46 @@ task :download_tar do
 	end
 	run 'cd /tmp ; tar xzf mod_evasive_1.10.1.tar.gz --keep-newer-files'
 end
+
+
+# Menu, Header, Footer のページを作成する
+namespace :create do
+
+        # Default の操作
+        task :default do
+                menu
+                header
+                footer
+        end
+
+        # Menu ページを作成
+        task :menu do
+                put unindent(<<-'Menu'), '/tmp/Menu.wiki'
+                        !!!Menu
+                        *[[トップ|FrontPage]]
+                        !!!検索
+                        {{search v}}
+                        !!!Google
+                        {{google v,25wht,s20}}
+                        !!!更新履歴
+                        {{recentdays 14}}
+                Menu
+        end
+
+        # Header ページを作成
+        task :header do
+                put unindent(<<-'Header'), '/tmp/Header.wiki'
+                        {{outline}}
+                Header
+        end
+
+        # Footer ページを作成
+        task :footer do
+                put unindent(<<-'Footer'), '/tmp/Footer.wiki'
+                        {{attach}}
+                        ----
+                        {{footnote_list}}
+                Footer
+        end
+end
+
