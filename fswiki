@@ -4,10 +4,15 @@ def unindent(s)
   return s.gsub(/^\s+/, '')
   end
 
+# ファイルが存在しているか否かの確認
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
+
 #############################################################################
 ## ROLES.
 
-role :server, 'ec2-54-241-123-231.us-west-1.compute.amazonaws.com'
+role :server, ''
 
 set :user, 'ec2-user'
 set :sudo_password, ''
@@ -42,32 +47,6 @@ task :bash_conf do
     end
 end
 
-task :Menu do
-        put unindent(<<-'Menu'), '/tmp/Menu.wiki'
-		!!!Menu
-		*[[トップ|FrontPage]]
-		!!!検索
-		{{search v}}
-		!!!Google
-		{{google v,25wht,s20}}
-		!!!更新履歴
-		{{recentdays 14}}
-        Menu
-end
-
-task :Header do
-        put unindent(<<-'Header'), '/tmp/Header.wiki'
-		{{outline}}
-       	Header
-end
-
-task :Footer do
-        put unindent(<<-'Footer'), '/tmp/Footer.wiki'
-		{{attach}}
-		----
-		{{footnote_list}}
-       	Footer
-end
 
 desc "install fswiki"
 task :install_fswiki do
@@ -77,8 +56,12 @@ task :install_fswiki do
 
 	# fswiki インストールの事前準備
 	run 'sudo yum -y install httpd perl-CGI'
-	run "sudo wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip'"
-	run 'sudo unzip -d /tmp /tmp/wiki3_6_4.zip'
+
+	# Source の Download と展開
+        unless remote_file_exists?("/tmp/wiki3_6_4.zip")
+                run "wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip'"
+        end
+        run 'unzip -n -d /tmp /tmp/wiki3_6_4.zip'
 
 	# httpd の設定追加
 	run 'sudo sed -i "/^<Directory \"\/var\/www\/cgi-bin\">/a AddHandler text/css .css " /etc/httpd/conf/httpd.conf' 
