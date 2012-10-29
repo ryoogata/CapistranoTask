@@ -17,7 +17,7 @@ load 'config.rb'
 #set :_ACCESS_KEY
 #set :_SECRET_KEY
 #set :_AWS_CERT
-#set :__AWS_PK
+#set :_AWS_PK
 
 
 #############################################################################
