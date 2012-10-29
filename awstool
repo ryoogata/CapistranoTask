@@ -4,6 +4,11 @@ def unindent(s)
   return s.gsub(/^\s+/, '')
   end
 
+# ファイルが存在しているか否かの確認
+# ( 存在しているファイルの参照権限がないと動作しない )
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
 
 #############################################################################
 ## Settins:
