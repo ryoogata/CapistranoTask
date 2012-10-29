@@ -10,21 +10,11 @@ def remote_file_exists?(full_path)
   'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
 end
 
+
 #############################################################################
-## ROLES.
+## Settins:
+load 'config.rb'
 
-
-role :server, ''
-
-set :user, 'ec2-user'
-set :sudo_password, ''
-
-default_run_options[:pty] = true
-
-ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
-ssh_options[:auth_methods] = %w(publickey)
-
-set :use_sudo, true
 
 #############################################################################
 ## TASKS.
@@ -136,4 +126,19 @@ namespace :create do
                         {{footnote_list}}
                 Footer
         end
+
+end # End of namespace :create
+
+
+task :cap do
+	date = run 'date +%Y%m%d%H%M'
+end
+
+
+task :showdate do
+	FILENAME = `date +%Y%m%d%H%M`
+
+        run <<-CMD
+		echo #{FILENAME}
+        CMD
 end

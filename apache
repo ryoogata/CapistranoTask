@@ -4,19 +4,11 @@ def unindent(s)
   return s.gsub(/^\s+/, '')
   end
 
+
 #############################################################################
-## ROLES.
-role :server, ''
+## Settins:
+load 'config.rb'
 
-set :user, 'ec2-user'
-set :sudo_password, ''
-
-default_run_options[:pty] = true
-
-ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
-ssh_options[:auth_methods] = %w(publickey)
-
-set :use_sudo, true
 
 #############################################################################
 ## TASKS.
@@ -41,7 +33,9 @@ task :bash_conf do
     end
 end
 
+
 namespace :apache do
+
 	# apache のインストール
 	desc "install apache"
 	task :install do
@@ -55,4 +49,5 @@ namespace :apache do
 		run 'cd /tmp ; tar xzpvf mod_evasive_1.10.1.tar.gz'
 		run 'cd /tmp/mod_evasive ; sudo apxs -i -a -c mod_evasive20.c'
 	end
-end
+
+end # End of namespace :apache
