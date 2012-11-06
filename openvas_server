@@ -1,0 +1,82 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+# ファイルが存在しているか否かの確認
+# ( 存在しているファイルの参照権限がないと動作しない )
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
+
+
+#############################################################################
+## Settins:
+load 'config.rb'
+
+#############################################################################
+## Attribute.
+
+# バックアップファイルを保存する s3 buckets
+set :_S3_BUCKETS_NAME, 'ogata_buckets'
+
+# バックアップするファイル名の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g openvasServer201210262316.tgz )
+set :_BACKUPED_FILE_PREFIX, 'openvasServer'
+
+#############################################################################
+## TASKS.
+
+namespace :openvas_server do
+
+task :install do
+	# 事前準備
+	run 'wget -P /tmp http://www.atomicorp.com/installers/atomic'
+	run 'chmod +x /tmp/atomic'
+	run 'sed -i "/Do you agree to these terms/d" /tmp/atomic'
+	run '/tmp/atomic'
+
+	# 必要なパッケージのインストール
+	packages = %w[
+		openvas openvas-manager openvas-scanner
+	]
+	run "yum -y install #{packages.join(' ')}"
+
+	# openvassd.conf の設定
+	run 'sed -i "s/log_plugins_name_at_load = no/log_plugins_name_at_load = yes/" /etc/openvas/openvassd.conf' 
+	run 'sed -i "s/log_whole_attack = no/log_whole_attack = yes/" /etc/openvas/openvassd.conf' 
+end
+
+
+desc "Backup upload in S3 Buckets"
+task :backup do
+        # コマンドを実行してる Host 上での date コマンドの出力結果
+        # リモート Host 上での実行結果ではない
+        FILENAME = `date +%Y%m%d%H%M`
+
+	# /var/cache/openvas Directory と /var/lib/openvas/users Directory を Backup
+        run <<-CMD
+                cd / ; sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz /var/cache/openvas /var/lib/openvas/users &&
+                sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
+                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
+        CMD
+end
+
+
+desc "Restore Data from Backuped file in S3 Buckets"
+task :restore do
+        # S3 に保存しているデータを Download して展開
+	# /var/cache/openvas Directory と /var/lib/openvas/users Directory を Restore
+        run <<-CMD
+                # S3 に保存しているデータの Download
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz /tmp &&
+		# リストア作業
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+		| xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C /
+	CMD
+end
+
+end # End of namespace :openvas_server
