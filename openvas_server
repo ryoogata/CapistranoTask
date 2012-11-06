@@ -56,7 +56,7 @@ task :backup do
         # リモート Host 上での実行結果ではない
         FILENAME = `date +%Y%m%d%H%M`
 
-	# /var/cache/openvas Directory と /var/lib/openvas/users Directory を Backup
+	# Directory: /var/cache/openvas, Directory: /var/lib/openvas/users Directory を Backup
         run <<-CMD
                 cd / ; sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz /var/cache/openvas /var/lib/openvas/users &&
                 sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
@@ -68,7 +68,7 @@ end
 desc "Restore Data from Backuped file in S3 Buckets"
 task :restore do
         # S3 に保存しているデータを Download して展開
-	# /var/cache/openvas Directory と /var/lib/openvas/users Directory を Restore
+	# Directory: /var/cache/openvas, Directory: /var/lib/openvas/users Directory を Restore
         run <<-CMD
                 # S3 に保存しているデータの Download
                 sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
