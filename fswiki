@@ -1,0 +1,185 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+# ファイルが存在しているか否かの確認
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
+
+
+#############################################################################
+## Settins:
+load 'config.rb'
+
+
+#############################################################################
+## Attribute.
+
+# fswiki の本体がインストールされる Directory
+set :_MAIN_DIRECTORY, '/var/www/cgi-bin/wiki'
+
+# バックアップを取得する Directory
+set :_BACKUP_DIRECTORY, '/opt/wiki'
+
+# バックアップファイルを保存する s3 buckets
+set :_S3_BUCKETS_NAME, 'ogata_buckets'
+
+# バックアップするファイル名の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g fswiki201210262316.tgz )
+set :_BACKUPED_FILE_PREFIX, 'fswiki'
+
+# 下記 Attribute は config.rb に記載している
+# set :_ACCESS_KEY
+# set :_SECRET_KEY
+
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+
+desc "Initalize bash configuration ( put .inputrc )"
+task :bash_conf do
+    # root ユーザの為の設定
+        put unindent(<<-'CONF'), '/tmp/.inputrc'
+                Control-p: history-search-backward
+                set show-all-if-ambiguous on
+        CONF
+        run 'sudo cp /tmp/.inputrc /root'
+
+    # Ubuntu の場合の処理
+    if user == 'ubuntu' then
+        run <<-CMD
+            cp /tmp/.inputrc /home/ubuntu
+        CMD
+    end
+end
+
+
+namespace :fswiki do
+
+desc "install fswiki"
+task :install do
+
+	# fswiki インストールの事前準備
+	run 'sudo yum -y install httpd perl-CGI'
+
+	# Source の Download と展開
+        unless remote_file_exists?("/tmp/wiki3_6_4.zip")
+		run "wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip'"
+        end
+        run 'unzip -n -d /tmp /tmp/wiki3_6_4.zip'
+
+	# httpd の設定追加
+	run 'sudo sed -i "/^<Directory \"\/var\/www\/cgi-bin\">/a AddHandler text/css .css " /etc/httpd/conf/httpd.conf' 
+
+	# Default のままで利用する Director の準備
+        run <<-CMD
+		sudo mkdir -p #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/docs #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/lib #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/plugin #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/theme #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/tmpl #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/setup.dat #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/setup.sh #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/wiki.cgi #{_MAIN_DIRECTORY}
+	CMD
+
+	# Backup 取得用の Directory の準備
+        run <<-CMD
+		sudo mkdir #{_BACKUP_DIRECTORY} &&
+		sudo mkdir #{_BACKUP_DIRECTORY}/attach &&
+		sudo mkdir #{_BACKUP_DIRECTORY}/config &&
+		sudo mkdir #{_BACKUP_DIRECTORY}/backup &&
+		sudo mkdir #{_BACKUP_DIRECTORY}/data &&
+		sudo mkdir #{_BACKUP_DIRECTORY}/log &&
+		sudo mkdir #{_BACKUP_DIRECTORY}/pdf &&
+		sudo mkdir #{_BACKUP_DIRECTORY}/plugin && # Default ではない、追加した plugin 用の Directory
+		sudo ln -s #{_BACKUP_DIRECTORY}/attach #{_MAIN_DIRECTORY} &&
+		sudo ln -s #{_BACKUP_DIRECTORY}/backup #{_MAIN_DIRECTORY} &&
+		sudo ln -s #{_BACKUP_DIRECTORY}/log #{_MAIN_DIRECTORY} &&
+		sudo ln -s #{_BACKUP_DIRECTORY}/pdf #{_MAIN_DIRECTORY} &&
+		sudo ln -s #{_BACKUP_DIRECTORY}/config #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/config/* #{_BACKUP_DIRECTORY}/config &&
+		sudo ln -s #{_BACKUP_DIRECTORY}/data #{_MAIN_DIRECTORY} &&
+		sudo mv /tmp/wiki3_6_4/data/* #{_BACKUP_DIRECTORY}/data/
+	CMD
+
+	# パッチの適用
+        run <<-CMD
+		# patch fswiki-patch-20110813 の適用
+		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Ffswiki-patch-20110813.zip' &&
+		unzip -d /tmp /tmp/fswiki-patch-20110813.zip &&
+		sudo cp /tmp/fswiki-patch-20110813/lib/Util.pm #{_MAIN_DIRECTORY}/lib &&
+	
+		# patch fswiki-pache-20110823 の適用
+		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=iij&f=%2Ffswiki%2F48737%2Ffswiki-pache-20110823.zip' &&
+		unzip -d /tmp /tmp/fswiki-pache-20110823.zip &&
+		sudo cp /tmp/fswiki-pache-20110823/lib/Wiki/InterWiki.pm #{_MAIN_DIRECTORY}/lib/Wiki/
+	CMD
+
+	# setup スクリプトの実行
+        run <<-CMD
+		cd #{_MAIN_DIRECTORY} ; sudo ./setup.sh
+	CMD
+
+	# パーミッションの変更
+        run <<-CMD
+		sudo chown -R apache #{_MAIN_DIRECTORY} &&
+		sudo chown -R apache #{_BACKUP_DIRECTORY}
+	CMD
+
+	# httpd の起動
+	run 'sudo /etc/init.d/httpd start'
+
+	# http://<Instance Public DNS>/cgi-bin/wiki/wiki.cgi にアクセス
+end
+
+
+desc "Restore Data from Backuped file in S3 Buckets"
+task :restore do
+	# S3 に保存しているデータを Download して展開
+	run <<-CMD
+		# S3 に保存しているデータの Download
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+		| xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz /tmp &&
+		# リストア作業
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+		| xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C /opt
+	CMD
+
+	# plugin 用の link を作成
+	run "ls /opt/wiki/plugin | sudo xargs -I 'STRINGS' ln -s /opt/wiki/plugin/'STRINGS' /var/www/cgi-bin/wiki/plugin/'STRINGS'"
+
+	# パーミッションの変更
+        run <<-CMD
+		sudo chown -R apache #{_MAIN_DIRECTORY} &&
+		sudo chown -R apache #{_BACKUP_DIRECTORY}
+	CMD
+
+	# httpd の再起動
+	run 'sudo /etc/init.d/httpd restart'
+end
+
+
+desc "Backup upload in S3 Buckets"
+task :backup do
+	# コマンドを実行してる Host 上での date コマンドの出力結果
+	# リモート Host 上での実行結果ではない
+        FILENAME = `date +%Y%m%d%H%M`
+
+        run <<-CMD
+		cd /opt ; sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz wiki &&
+		sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
+		sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
+        CMD
+end
+
+end	# End of namespace :fswiki
