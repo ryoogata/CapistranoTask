@@ -1,0 +1,92 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+# ファイルが存在しているか否かの確認
+# ( 存在しているファイルの参照権限がないと動作しない )
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
+
+
+#############################################################################
+## Settins:
+load 'config.rb'
+
+
+#############################################################################
+## TASKS.
+
+namespace :vncserver do
+
+task :install do
+	# 必要なパッケージのインストール
+	packages = %w[
+		tigervnc-server
+	]
+	run "yum -y install #{packages.join(' ')}"
+
+	# Desktop 環境のインストール
+	run 'yum -y groupinstall Desktop'
+
+	# .vnc Directory の作成
+	run 'mkdir /root/.vnc'
+
+	# vncservers の設定追加
+        put unindent(<<-'CONF'), '/tmp/vncservers'
+		VNCSERVERS="1:root"
+		#VNCSERVERARGS[1]="-geometry 1024x768 -nolisten tcp"
+		VNCSERVERARGS[1]="-geometry 1280x1024 -nolisten tcp"
+        CONF
+	run 'cat /tmp/vncservers >> /etc/sysconfig/vncservers'
+
+	# xstartup の設置
+        put unindent(<<-'CONF'), '/tmp/xstartup'
+		#!/bin/sh
+		[ -r /etc/sysconfig/i18n ] && . /etc/sysconfig/i18n
+		export LANG
+		export SYSFONT
+		vncconfig -iconic &
+		unset SESSION_MANAGER
+		unset DBUS_SESSION_BUS_ADDRESS
+		OS=`uname -s`
+		if [ $OS = 'Linux' ]; then
+  		case "$WINDOWMANAGER" in
+    		*gnome*)
+      		if [ -e /etc/SuSE-release ]; then
+        		PATH=$PATH:/opt/gnome/bin
+        		export PATH
+      		fi
+      		;;
+  		esac
+		fi
+		if [ -x /etc/X11/xinit/xinitrc ]; then
+  		exec /etc/X11/xinit/xinitrc
+		fi
+		if [ -f /etc/X11/xinit/xinitrc ]; then
+  		exec sh /etc/X11/xinit/xinitrc
+		fi
+		[ -r $HOME/.Xresources ] && xrdb $HOME/.Xresources
+		xsetroot -solid grey
+		xterm -geometry 80x24+10+10 -ls -title "$VNCDESKTOP Desktop" &
+		twm &
+        CONF
+	run 'mv /tmp/xstartup /root/.vnc'
+	run 'chmod +x /root/.vnc/xstartup'
+
+	# VNC ログイン用パスワードの準備
+        run <<-CMD
+		echo #{_VNCSERVER_PASSWORD} > /tmp/vncpasswd
+	CMD
+	run 'cat /tmp/vncpasswd | vncpasswd -f > /root/.vnc/passwd'
+	run 'rm -rf /tmp/vncpasswd'
+	run 'chmod 600 /root/.vnc/passwd'
+
+	# FIXME: 起動しない
+	#run '/etc/init.d/vncserver start'
+	#run '/etc/init.d/vncserver restart'
+end
+
+end # End of namespace :vncserver
