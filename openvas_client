@@ -1,0 +1,100 @@
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+  end
+
+# ファイルが存在しているか否かの確認
+# ( 存在しているファイルの参照権限がないと動作しない )
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
+
+
+#############################################################################
+## Settins:
+load 'config.rb'
+
+#############################################################################
+## Attribute.
+
+# バックアップファイルを保存する s3 buckets
+set :_S3_BUCKETS_NAME, 'ogata_buckets'
+
+# バックアップするファイル名の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g openvasClient201210262316.tgz )
+set :_BACKUPED_FILE_PREFIX, 'openvasClient'
+
+#############################################################################
+## TASKS.
+task :whoami do
+	run "#{sudo :as => 'root'} whoami"
+end
+
+namespace :openvas_client do
+
+desc "OpenVAS Client"
+task :install do
+	# 事前準備
+	run 'wget -P /tmp http://www.atomicorp.com/installers/atomic'
+	run 'chmod +x /tmp/atomic'
+	run 'sed -i "/Do you agree to these terms/d" /tmp/atomic'
+	run '/tmp/atomic'
+
+	# 必要なパッケージのインストール
+	packages = %w[
+		glib2-devel gtk2-devel
+		openvas-libraries-devel
+		gpgme-devel gcc make
+	]
+	run "yum -y install #{packages.join(' ')}"
+
+	# Openvas Client の Source の Download と解凍
+	run 'wget -P /tmp http://wald.intevation.org/frs/download.php/845/openvas-client-3.0.3.tar.gz'
+	run 'cd /tmp ; tar xzpf openvas-client-3.0.3.tar.gz'
+	
+	# Source の修正
+	run 'sed -i "s/#include <openvas\/network.h>/#include <openvas\/misc\/network.h>/" /tmp/openvas-client-3.0.3/openvas/auth.c'
+	run 'sed -i "s/#include <openvas\/network.h>/#include <openvas\/misc\/network.h>/" /tmp/openvas-client-3.0.3/openvas/sighand.c'
+	run 'sed -i "s/#include <openvas\/network.h>/#include <openvas\/misc\/network.h>/" /tmp/openvas-client-3.0.3/openvas/attack.c'
+	run 'sed -i "s/#include <openvas\/network.h>/#include <openvas\/misc\/network.h>/" /tmp/openvas-client-3.0.3/openvas/prefs_dialog/prefs_dialog_auth.c'
+	run 'sed -i "s/#include <openvas\/plugutils.h>/#include <openvas\/misc\/plugutils.h>/" /tmp/openvas-client-3.0.3/openvas/parser.c'
+	run 'sed -i "s/#include <openvas\/plugutils.h>/#include <openvas\/misc\/plugutils.h>/" /tmp/openvas-client-3.0.3/openvas/backend.c'
+	run 'sed -i "s/#include <openvas\/plugutils.h>/#include <openvas\/misc\/plugutils.h>/" /tmp/openvas-client-3.0.3/openvas/subset.c'
+	run 'sed -i "s/#include <openvas\/system.h>/#include <openvas\/misc\/system.h>/" /tmp/openvas-client-3.0.3/openvas/prefs_dialog/prefs_dialog_auth.c'
+	run 'sed -i "s/#include <openvas\/system.h>/#include <openvas\/misc\/system.h>/" /tmp/openvas-client-3.0.3/src/gui/nvt_pref_sshlogin.c'
+
+	# Openvas Client のコンパイルとインストール
+	run 'cd /tmp/openvas-client-3.0.3 ; ./configure ; make ; make install'
+end
+
+desc "Backup upload in S3 Buckets"
+task :backup do
+        # コマンドを実行してる Host 上での date コマンドの出力結果
+        # リモート Host 上での実行結果ではない
+        FILENAME = `date +%Y%m%d%H%M`
+
+	# File: /root/.openvasrc, Directory: /root/.openvas を Backup
+        run <<-CMD
+		cd / ; tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz /root/.openvasrc /root/.openvas &&
+                sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
+                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
+        CMD
+end
+
+desc "Restore Data from Backuped file in S3 Buckets"
+task :restore do
+        # S3 に保存しているデータを Download して展開
+	# File: /root/.openvasrc, Directory: /root/.openvas を Restore
+        run <<-CMD
+                # S3 に保存しているデータの Download
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz /tmp &&
+                # リストア作業
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C /
+        CMD
+end
+
+end # End of namespace :openvas_client
