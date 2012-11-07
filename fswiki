@@ -39,29 +39,6 @@ set :_BACKUPED_FILE_PREFIX, 'fswiki'
 
 #############################################################################
 ## TASKS.
-task :whoami do
-	run "#{sudo :as => 'root'} whoami"
-end
-
-
-desc "Initalize bash configuration ( put .inputrc )"
-task :bash_conf do
-    # root ユーザの為の設定
-        put unindent(<<-'CONF'), '/tmp/.inputrc'
-                Control-p: history-search-backward
-                set show-all-if-ambiguous on
-        CONF
-        run 'sudo cp /tmp/.inputrc /root'
-
-    # Ubuntu の場合の処理
-    if user == 'ubuntu' then
-        run <<-CMD
-            cp /tmp/.inputrc /home/ubuntu
-        CMD
-    end
-end
-
-
 namespace :fswiki do
 
 desc "install fswiki"
@@ -177,9 +154,25 @@ task :backup do
 
         run <<-CMD
 		cd /opt ; sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz wiki &&
-		sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
+		sudo s3cmd -c /root/.s3cfg  put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
 		sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
         CMD
+end
+
+
+desc "Setup Shutdown Script"
+task :shutdownscript do
+	# サーバ Shutdown 時に実行する Script の設置
+        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
+		#!/bin/sh
+		FILENAME=`date +%Y%m%d%H%M`
+
+		cd /opt ; tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz wiki 
+		s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
+		rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
+        SCRIPT
+        run 'sudo mv /tmp/backup2s3.sh /root'
+	run 'sudo chmod +x /root/backup2s3.sh'
 end
 
 end	# End of namespace :fswiki
