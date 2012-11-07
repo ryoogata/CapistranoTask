@@ -20,23 +20,6 @@ set :use_sudo, true
 
 #############################################################################
 ## TASKS.
-task :whoami do
-	run "#{sudo :as => 'root'} whoami"
-end
-
-desc "Initalize bash configuration ( put .inputrc )"
-task :bash_conf do
-	put unindent(<<-'CONF'), '/tmp/.inputrc'
-		Control-p: history-search-backward
-		set show-all-if-ambiguous on
-	CONF
-	run 'sudo cp /tmp/.inputrc /root'
-end
-
-desc "yum update"
-task :yum_update do
-	run 'sudo yum update -y'
-end
 
 desc "install NFS Server"
 task :install_nfsserver do
@@ -53,9 +36,4 @@ end
 desc "setup NFS Client"
 task :setup_nfsclient do
 	run 'sudo yum -y install rpcbind nfs-utils'
-end
-
-desc "Install Apache"
-task :install_apache do
-  run 'sudo yum -y install httpd httpd-devel'
 end

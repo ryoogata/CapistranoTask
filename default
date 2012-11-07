@@ -39,6 +39,73 @@ task :bash_conf do
     end
 end
 
+# SELinux を Disable にする
+desc "SELinux Disable"
+task :selinux_disable do
+  run 'sed -i "s/SELINUX=enforcing/SELINUX=disabled/" /etc/sysconfig/selinux'
+  run 'setenforce 0'
+end
+
+
+desc "Setup CentOS epel Repository ( x86_64 )"
+task :setup_epel do
+  rpm = 'rpm -Uv'
+  run <<-CMD
+    #{rpm} http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm
+  CMD
+end
+
+
+desc "Setup CentOS rpmforge Repository ( x86_64 )"
+task :setup_rpmforge do
+  rpm = 'rpm -Uv'
+  run <<-CMD
+    #{rpm} http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm
+  CMD
+end
+
+
+desc "yum update"
+task :yum_update do
+  run <<-CMD
+    yum update -y
+  CMD
+end
+
+before :yum_update, :setup_rpmforge, :setup_epel
+
+desc "Install Basic Packages"
+task :install_basic_packages do
+  run <<-CMD
+    yum install -y \
+      setuptool system-config-firewall-tui system-config-network-tui ntsysv man \
+      tcpdump wget ntp
+  CMD
+end
+
+desc "Install Ruby Develop Packages"
+task :install_RubyDev_packages do
+  run <<-CMD
+    yum install -y \
+      ruby ruby-devel ruby-ri ruby-rdoc ruby-shadow gcc gcc-c++ automake autoconf make curl dmidecode
+  CMD
+end
+
+desc "Install ruybgems"
+task :install_rubygems do
+  run <<-CMD
+    yum install -y rubygems
+  CMD
+end
+
+desc "Install Basic Packages"
+task :install_basic_packages do
+  run <<-CMD
+    yum install -y \
+      setuptool system-config-firewall-tui system-config-network-tui ntsysv man \
+      tcpdump wget ntp
+  CMD
+end
 
 # cap ファイル内のユーザ名 ( set :user ) を表示する
 task :cat_user do
@@ -141,4 +208,20 @@ task :showdate do
         run <<-CMD
 		echo #{FILENAME}
         CMD
+end
+
+
+desc "Set Localtime to JST"
+task :localtime_JST do
+	run 'yes | sudo cp -f /usr/share/zoneinfo/Japan /etc/localtime'
+end
+
+# パッケージのインストール
+desc "Install Package via yum"
+task :install_package do
+  packages = %w[
+    libxml2-devel zlib-devel
+    libxml2 zlib
+  ]
+  run "sudo yum -y install #{packages.join(' ')}"
 end

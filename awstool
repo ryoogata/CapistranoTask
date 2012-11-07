@@ -27,10 +27,6 @@ load 'config.rb'
 
 #############################################################################
 ## TASKS.
-task :whoami do
-	run "#{sudo :as => 'root'} whoami"
-end
-
 
 desc "Install AWS CERT & PRIVATE_KEY"
 task :pem_install do
@@ -50,6 +46,7 @@ task :pem_install do
 	run 'sudo rm -rf /tmp/pk.pem'
 	run 'echo EC2_PRIVATE_KEY=/root/pk.pem | sudo tee -a /root/.bash_profile'
 	run 'echo EC2_CERT=/root/cert.pem | sudo tee -a /root/.bash_profile'
+	run 'echo EC2_URL=https://ec2.us-west-1.amazonaws.com | sudo tee -a /root/.bash_profile'
 	run 'echo export EC2_PRIVATE_KEY EC2_CERT | sudo tee -a /root/.bash_profile'
 end
 

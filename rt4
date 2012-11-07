@@ -8,13 +8,18 @@ end
 ## Settins:
 load 'config.rb'
 
+#############################################################################
+## Attribute.
+
+# fswiki の本体がインストールされる Directory
+# ( 4.0.0 - 4.0.8 がインストール可能 )
+set :_RT_SOURCE, 'rt-4.0.8.tar.gz'
+
 
 #############################################################################
 ## TASKS.
 
 task :provision do
-	setup_epel
-	setup_rpmforge
 	install_preRTpackage	
 	install_mysql
 	install_apache
@@ -23,36 +28,20 @@ task :provision do
 	rt_http
 end
 
-task :setup_repo do
-	run 'rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm'
-	run 'rpm -Uv http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm'
-end
-
-desc "Setup CentOS epel Repository ( x86_64 )"
-task :setup_epel do
-  rpm = 'rpm -Uv'
-  run <<-CMD
-    #{rpm} http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm
-  CMD
-end
-
-desc "Setup CentOS rpmforge Repository ( x86_64 )"
-task :setup_rpmforge do
-  rpm = 'rpm -Uv'
-  run <<-CMD
-    #{rpm} http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm
-  CMD
-end
-
 
 desc "Install PreRequire RT 4 Package install"
 task :install_preRTpackage do
-  run <<-CMD
-    yum install -y \
-      perl perl-CPAN \
-      cpp gcc* autoconf* automake* libtool m4 make \
-      gd gd-devel libpng libpng-devel libjpeg libjpeg-devel freetype freetype-devel
-  CMD
+	# EPEL と RPM Forge のレポジトリのインストール
+	run 'rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm'
+	run 'rpm -Uv http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm'
+
+	# 事前に必要なパッケージをインストール
+	packages = %w[
+		perl perl-CPAN
+		cpp gcc* autoconf* automake* libtool m4 make
+		gd gd-devel libpng libpng-devel libjpeg libjpeg-devel freetype freetype-devel
+	]
+	run "sudo yum -y install #{packages.join(' ')}"
 end
 
 
@@ -113,6 +102,7 @@ task :install_RTpackage do
   run 'yum -y install perl-JSON*'
   run 'yum -y install perl-Net-CIDR'
   run 'yum -y install mod_fastcgi'
+  run 'yum -y install perl-JavaScript-Minifier'
   run 'yes | cpan CGI::PSGI'
   run 'yes | cpan Encode'
   run 'yes | cpan HTML::RewriteAttributes'
@@ -128,41 +118,45 @@ end
 
 
 task :rt4_install do
-   run 'cd /usr/local/src ; wget http://download.bestpractical.com/pub/rt/release/rt-4.0.6.tar.gz ; tar xzpvf rt-4.0.6.tar.gz'
-   run 'cd /usr/local/src/rt-4.0.6 ; sh configure ; make install'
-   run 'chmod -R u+rwX,go-w,go+rX /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
-   run 'chown -R root /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
-   run 'chgrp -R bin /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po'
-   run 'chmod 0770 /opt/rt4/var/mason_data /opt/rt4/var/session_data'
-   run 'chown -R apache /opt/rt4/var/mason_data /opt/rt4/var/session_data'
-   run 'chgrp -R apache /opt/rt4/var/mason_data /opt/rt4/var/session_data'
-   run 'cd /usr/local/src/rt-4.0.6 ; echo | make initialize-database'
+        RT_DIR = _RT_SOURCE.slice(0..7)
+
+	run <<-CMD
+		cd /usr/local/src ; wget http://download.bestpractical.com/pub/rt/release/#{_RT_SOURCE} ; tar xzpvf #{_RT_SOURCE} &&
+		cd /usr/local/src/#{RT_DIR} ; pwd
+		cd /usr/local/src/#{RT_DIR} ; sh configure ; make install
+		chmod -R u+rwX,go-w,go+rX /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po
+		chown -R root /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po
+		chgrp -R bin /opt/rt4/share/html /opt/rt4/local/html /opt/rt4/share/po /opt/rt4/local/po
+		chmod 0770 /opt/rt4/var/mason_data /opt/rt4/var/session_data
+		chown -R apache /opt/rt4/var/mason_data /opt/rt4/var/session_data
+		chgrp -R apache /opt/rt4/var/mason_data /opt/rt4/var/session_data
+		cd /usr/local/src/#{RT_DIR} ; echo | make initialize-database
+	CMD
 end
 
 
 task :rt_http do
-  put unindent(<<-'CONF'), '/etc/httpd/conf.d/rt.conf'
-    <VirtualHost *:80>
-    ### Optional apache logs for RT
-    # Ensure that your log rotation scripts know about these files
-    # ErrorLog /opt/rt4/var/log/apache2.error
-    # TransferLog /opt/rt4/var/log/apache2.access
-    # LogLevel debug
+	put unindent(<<-'CONF'), '/etc/httpd/conf.d/rt.conf'
+		<VirtualHost *:80>
+		### Optional apache logs for RT
+		# Ensure that your log rotation scripts know about these files
+		# ErrorLog /opt/rt4/var/log/apache2.error
+		# TransferLog /opt/rt4/var/log/apache2.access
+		# LogLevel debug
 
-    AddDefaultCharset UTF-8
+		AddDefaultCharset UTF-8
 
-    Alias /NoAuth/images/ /opt/rt4/share/html/NoAuth/images/
-    ScriptAlias / /opt/rt4/sbin/rt-server.fcgi/
+		Alias /NoAuth/images/ /opt/rt4/share/html/NoAuth/images/
+		ScriptAlias / /opt/rt4/sbin/rt-server.fcgi/
 
-    DocumentRoot "/opt/rt4/share/html"
-     <Location />
-        Order allow,deny
-        Allow from all
-
-        Options +ExecCGI
-        AddHandler fastcgi-script fcgi
-     </Location>
-    </VirtualHost>
-  CONF
-  run '/etc/init.d/httpd restart'
+		DocumentRoot "/opt/rt4/share/html"
+		<Location />
+		Order allow,deny
+		Allow from all
+		Options +ExecCGI
+		AddHandler fastcgi-script fcgi
+		</Location>
+		</VirtualHost>
+	CONF
+	run '/etc/init.d/httpd restart'
 end

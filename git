@@ -20,9 +20,6 @@ set :use_sudo, true
 
 #############################################################################
 ## TASKS.
-task :whoami do
-	run "#{sudo :as => 'root'} whoami"
-end
 
 desc "install git Server"
 task :install_gitserver do

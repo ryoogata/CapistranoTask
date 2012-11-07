@@ -21,9 +21,6 @@ set :use_sudo, true
 
 #############################################################################
 ## TASKS.
-task :whoami do
-	run "#{sudo :as => 'root'} whoami"
-end
 
 desc "install Floodlight Amazon Ubuntu Server 11.10 "
 task :install_floodligth do

@@ -20,14 +20,6 @@ load 'config.rb'
 ## TASKS.
 
 task :backupS3 do
-	# サーバ Shutdown 時に実行する Script の設置
-        put unindent(<<-'SCRIPT'), '/tmp/backup2s3.sh'
-		#!/bin/sh
-		s3cmd -c /root/.s3cfg put /etc/passwd s3://ogata_buckets
-        SCRIPT
-        run 'sudo mv /tmp/backup2s3.sh /root'
-	run 'sudo chmod +x /root/backup2s3.sh'
-
 	# /etc/init.d に設置する Script の設置
         put unindent(<<-'SCRIPT'), '/tmp/backup2s3'
 		#!/bin/bash  
@@ -69,6 +61,7 @@ task :backupS3 do
         SCRIPT
         run 'sudo mv /tmp/backup2s3 /etc/init.d/backup2s3'
 	run 'sudo chmod 755 /etc/init.d/backup2s3'
+	run 'sudo chown root:root /etc/init.d/backup2s3'
 
 	# backup2s3 の自動起動化 ( 実際に backup2s3 のサービスは開始しない )
 	run 'sudo chkconfig --add backup2s3'

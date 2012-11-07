@@ -28,9 +28,6 @@ set :_BACKUPED_FILE_PREFIX, 'openvasClient'
 
 #############################################################################
 ## TASKS.
-task :whoami do
-	run "#{sudo :as => 'root'} whoami"
-end
 
 namespace :openvas_client do
 
