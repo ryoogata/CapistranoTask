@@ -6,6 +6,7 @@
 #############################################################################
 ## Settins.
 load 'config.rb'
+load 'default'
 load 'awstool'
 load 'shutdownbuckup'
 
