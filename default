@@ -1,16 +1,3 @@
-##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
-
-# ファイルが存在しているか否かの確認
-# ( 存在しているファイルの参照権限がないと動作しない )
-def remote_file_exists?(full_path)
-  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
-end
-
-
 #############################################################################
 ## Settins:
 load 'config.rb'
@@ -18,11 +5,16 @@ load 'config.rb'
 
 #############################################################################
 ## TASKS.
+
+namespace :operationalTask do
+
+desc "default: execute whoami"
 task :whoami do
 	run "#{sudo :as => 'root'} whoami"
 end
 
-desc "Initalize bash configuration ( put .inputrc )"
+
+desc "default: Initalize bash configuration ( put .inputrc )"
 task :bash_conf do
     # root ユーザの為の設定
         put unindent(<<-'CONF'), '/tmp/.inputrc'
@@ -39,15 +31,16 @@ task :bash_conf do
     end
 end
 
+
 # SELinux を Disable にする
-desc "SELinux Disable"
+desc "default: SELinux Disable"
 task :selinux_disable do
   run 'sed -i "s/SELINUX=enforcing/SELINUX=disabled/" /etc/sysconfig/selinux'
   run 'setenforce 0'
 end
 
 
-desc "Setup CentOS epel Repository ( x86_64 )"
+desc "default: Setup CentOS epel Repository ( x86_64 )"
 task :setup_epel do
   rpm = 'rpm -Uv'
   run <<-CMD
@@ -56,7 +49,7 @@ task :setup_epel do
 end
 
 
-desc "Setup CentOS rpmforge Repository ( x86_64 )"
+desc "default: Setup CentOS rpmforge Repository ( x86_64 )"
 task :setup_rpmforge do
   rpm = 'rpm -Uv'
   run <<-CMD
@@ -65,7 +58,7 @@ task :setup_rpmforge do
 end
 
 
-desc "yum update"
+desc "default: execute yum update"
 task :yum_update do
   run <<-CMD
     yum update -y
@@ -74,7 +67,8 @@ end
 
 before :yum_update, :setup_rpmforge, :setup_epel
 
-desc "Install Basic Packages"
+
+desc "default: Install Basic Packages"
 task :install_basic_packages do
   run <<-CMD
     yum install -y \
@@ -83,7 +77,8 @@ task :install_basic_packages do
   CMD
 end
 
-desc "Install Ruby Develop Packages"
+
+desc "default: Install Ruby Develop Packages"
 task :install_RubyDev_packages do
   run <<-CMD
     yum install -y \
@@ -91,137 +86,12 @@ task :install_RubyDev_packages do
   CMD
 end
 
-desc "Install ruybgems"
+
+desc "default: Install ruybgems"
 task :install_rubygems do
   run <<-CMD
     yum install -y rubygems
   CMD
 end
 
-desc "Install Basic Packages"
-task :install_basic_packages do
-  run <<-CMD
-    yum install -y \
-      setuptool system-config-firewall-tui system-config-network-tui ntsysv man \
-      tcpdump wget ntp
-  CMD
-end
-
-# cap ファイル内のユーザ名 ( set :user ) を表示する
-task :cat_user do
-        run <<-CMD
-                echo #{user}
-        CMD
-end
-
-
-# MTOS_SOURCE の末尾 .zip を削除した文字列を MTOS へ代入
-task :cat_val do
-        MTOS_SOURCE = 'MTOS-5.14-ja.zip'
-        MTOS = MTOS_SOURCE.delete(".zip")
-        run <<-CMD
-                echo #{MTOS}
-        CMD
-end
-
-
-# remote_file_exists を利用して、Directory が存在していなければ作成 
-task :mkdir do
-	DIRECTORY = 'mage'
-	unless remote_file_exists?("/tmp/#{DIRECTORY}")
-		run <<-CMD
-			mkdir /tmp/#{DIRECTORY}
-		CMD
-	end
-end
-
-
-# remote_file_exists を利用して、ファイルが存在していなければ Download して展開 ( unzip -n )
-task :download_unzip do
-        unless remote_file_exists?("/tmp/wiki3_6_4.zip")
-        	run "wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip'"
-	end
-        run 'unzip -n -d /tmp /tmp/wiki3_6_4.zip'
-end
-
-
-# remote_file_exists を利用して、ファイルが存在していなければ Download して展開 ( tar --keep-newer-files )
-task :download_tar do
-        unless remote_file_exists?("/tmp/mod_evasive_1.10.1.tar.gz")
-		run 'wget -P /tmp http://www.zdziarski.com/blog/wp-content/uploads/2010/02/mod_evasive_1.10.1.tar.gz'
-	end
-	run 'cd /tmp ; tar xzf mod_evasive_1.10.1.tar.gz --keep-newer-files'
-end
-
-
-# Menu, Header, Footer のページを作成する
-namespace :create do
-
-        # Default の操作
-        task :default do
-                menu
-                header
-                footer
-        end
-
-        # Menu ページを作成
-        task :menu do
-                put unindent(<<-'Menu'), '/tmp/Menu.wiki'
-                        !!!Menu
-                        *[[トップ|FrontPage]]
-                        !!!検索
-                        {{search v}}
-                        !!!Google
-                        {{google v,25wht,s20}}
-                        !!!更新履歴
-                        {{recentdays 14}}
-                Menu
-        end
-
-        # Header ページを作成
-        task :header do
-                put unindent(<<-'Header'), '/tmp/Header.wiki'
-                        {{outline}}
-                Header
-        end
-
-        # Footer ページを作成
-        task :footer do
-                put unindent(<<-'Footer'), '/tmp/Footer.wiki'
-                        {{attach}}
-                        ----
-                        {{footnote_list}}
-                Footer
-        end
-
-end # End of namespace :create
-
-
-task :cap do
-	date = run 'date +%Y%m%d%H%M'
-end
-
-
-task :showdate do
-	FILENAME = `date +%Y%m%d%H%M`
-
-        run <<-CMD
-		echo #{FILENAME}
-        CMD
-end
-
-
-desc "Set Localtime to JST"
-task :localtime_JST do
-	run 'yes | sudo cp -f /usr/share/zoneinfo/Japan /etc/localtime'
-end
-
-# パッケージのインストール
-desc "Install Package via yum"
-task :install_package do
-  packages = %w[
-    libxml2-devel zlib-devel
-    libxml2 zlib
-  ]
-  run "sudo yum -y install #{packages.join(' ')}"
-end
+end # namespace :operationalTask
