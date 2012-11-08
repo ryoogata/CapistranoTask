@@ -1,18 +1,13 @@
 ##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
-
-# ファイルが存在しているか否かの確認
-def remote_file_exists?(full_path)
-  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
-end
+## Support.	Amazon Linux AMI 2012.09
+## 		AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
 
 
 #############################################################################
-## Settins:
+## Settins.
 load 'config.rb'
+load 'awstool'
+load 'shutdownbuckup'
 
 
 #############################################################################
@@ -39,10 +34,60 @@ set :_BACKUPED_FILE_PREFIX, 'fswiki'
 
 #############################################################################
 ## TASKS.
-namespace :fswiki do
+
+namespace :operationalTask do
+
+desc "Backup upload in S3 Buckets"
+task :backup do
+	# コマンドを実行してる Host 上での date コマンドの出力結果
+	# リモート Host 上での実行結果ではない
+        FILENAME = `date +%Y%m%d%H%M`
+
+        run <<-CMD
+		cd /opt ; sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz wiki &&
+		sudo s3cmd -c /root/.s3cfg  put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
+		sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
+        CMD
+end
+
+end # End of namespace :OperationalTask
+
+
+#############################################################################
+namespace :serverTemplate do
+
+# FSWiki のクリーンインストール
+desc "Build FSWiki Server"
+task :install do
+	bootTask.install_s3cmd
+	bootTask.backupS3
+	bootTask.install
+	bootTask.backupScript
+	bootTask.configure_cron
+end
+
+
+# バックアップからのリストア
+desc "Restore from S3 Backup FSWiki Server"
+task :restore do
+	bootTask.install_s3cmd
+	bootTask.backupS3
+	bootTask.install
+	bootTask.restore
+	bootTask.backupScript
+	bootTask.configure_cron
+end
+
+end # End of namespace :serverTemplate
+
+
+#############################################################################
+namespace :bootTask do
 
 desc "install fswiki"
 task :install do
+	# システム時間を日本時間に設定
+	run 'yes | sudo cp -f /usr/share/zoneinfo/Japan /etc/localtime'
 
 	# fswiki インストールの事前準備
 	run 'sudo yum -y install httpd perl-CGI'
@@ -129,7 +174,10 @@ task :restore do
 		| xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz /tmp &&
 		# リストア作業
 		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-		| xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C /opt
+		| xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C /opt &&
+		# ファイルの削除
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+		| xargs -I 'STRINGS' sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz
 	CMD
 
 	# plugin 用の link を作成
@@ -146,22 +194,8 @@ task :restore do
 end
 
 
-desc "Backup upload in S3 Buckets"
-task :backup do
-	# コマンドを実行してる Host 上での date コマンドの出力結果
-	# リモート Host 上での実行結果ではない
-        FILENAME = `date +%Y%m%d%H%M`
-
-        run <<-CMD
-		cd /opt ; sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz wiki &&
-		sudo s3cmd -c /root/.s3cfg  put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
-		sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
-        CMD
-end
-
-
-desc "Setup Shutdown Script"
-task :shutdownscript do
+desc "Setup Backup Script"
+task :backupScript do
 	# サーバ Shutdown 時に実行する Script の設置
         put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
 		#!/bin/sh
@@ -175,4 +209,13 @@ task :shutdownscript do
 	run 'sudo chmod +x /root/backup2s3.sh'
 end
 
-end	# End of namespace :fswiki
+
+desc "Setup cron Backup"
+task :configure_cron  do
+        CRONTAB = '12 23 * * * root /root/backup2s3.sh'
+        run <<-CMD
+                sudo sh -c "echo #{CRONTAB} >> /etc/crontab"
+        CMD
+end
+
+end	# End of namespace :BootScript
