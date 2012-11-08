@@ -1,14 +1,7 @@
 ##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
+## Target OS:	Amazon Linux AMI 2012.09
+##		AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
 
-# ファイルが存在しているか否かの確認
-# ( 存在しているファイルの参照権限がないと動作しない )
-def remote_file_exists?(full_path)
-  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
-end
 
 #############################################################################
 ## Settins:
@@ -28,7 +21,9 @@ load 'config.rb'
 #############################################################################
 ## TASKS.
 
-desc "Install AWS CERT & PRIVATE_KEY"
+namespace :bootTask do
+
+desc "awstool: Install AWS CERT & PRIVATE_KEY"
 task :pem_install do
 	put unindent(<<-CERT), '/tmp/cert.pem'
 		-----BEGIN CERTIFICATE-----
@@ -51,7 +46,7 @@ task :pem_install do
 end
 
 
-desc "Install s3cmd"
+desc "awstool: Install s3cmd"
 task :install_s3cmd do
 
 	# python-magic のインストール
@@ -115,3 +110,5 @@ task :install_s3cmd do
 	run 'sudo chown root:root /root/.s3cfg'
 	run 'sudo chmod 600 /root/.s3cfg'
 end
+
+end # End of namespace :bootTask

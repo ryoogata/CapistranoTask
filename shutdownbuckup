@@ -1,16 +1,3 @@
-##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
-
-# ファイルが存在しているか否かの確認
-# ( 存在しているファイルの参照権限がないと動作しない )
-def remote_file_exists?(full_path)
-  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
-end
-
-
 #############################################################################
 ## Settins:
 load 'config.rb'
@@ -19,6 +6,9 @@ load 'config.rb'
 #############################################################################
 ## TASKS.
 
+namespace :bootTask do
+
+desc "shutdownbuckup: Setup Shutdown time run backup script"
 task :backupS3 do
 	# /etc/init.d に設置する Script の設置
         put unindent(<<-'SCRIPT'), '/tmp/backup2s3'
@@ -68,3 +58,5 @@ task :backupS3 do
 	run 'sudo chkconfig backup2s3 on'
 	run 'sudo /etc/init.d/backup2s3 start'
 end
+
+end # End of namespace :bootTask
