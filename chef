@@ -1,50 +1,39 @@
 ##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
+## Support.     Amazon Linux AMI 2012.09
+##              AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+
 
 #############################################################################
-## ROLES.
-role :server, ''
+## Settins.
+load 'config.rb'
+load 'default'
 
-set :user, 'ec2-user'
-set :sudo_password, ''
-
-default_run_options[:pty] = true
-
-ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
-ssh_options[:auth_methods] = %w(publickey)
-
-set :use_sudo, true
 
 #############################################################################
 ## TASKS.
 
 desc "install chef-solor in Amazon Linux AMI"
 task :install_chefsolo do
-	# Attribute ¤ÎÀßÄê
+
+	# Attribute
 	FILE_CACHE_PATH = '/tmp'
 	COOKBOOK_PATH ='/root/chef-solo/cookbooks'
 
-	# É¬Í×¤Ê¥Ç¥£¥ì¥¯¥È¥ê¤ÎºîÀ®
 	run 'sudo mkdir /etc/chef'
 	run <<-CMD
 		sudo mkdir -p #{COOKBOOK_PATH}
 	CMD
 
-	# ÀßÄê¥Õ¥¡¥¤¥ë¤Î½àÈ÷
 	put unindent(<<-CONF), "/tmp/solo.rb"
 		file_cache_path "#{FILE_CACHE_PATH}"
 		cookbook_path "#{COOKBOOK_PATH}"
 	CONF
 	run 'sudo mv /tmp/solo.rb /etc/chef'
 
-	# ¥¢¥×¥ê¥±¡¼¥·¥ç¥ó¤Î¥¤¥ó¥¹¥È¡¼¥ë
 	run 'sudo yum -y install git rubygems ruby ruby-devel ruby-ri ruby-rdoc ruby-shadow gcc gcc-c++ automake autoconf make curl dmidecode libxml2-devel libxslt-devel'
 	run 'sudo gem install chef --no-ri --no-rdoc'
 	
-	# cookbook ¤Î clone
+	# github ã‹ã‚‰ cookbook ã® Download
 	run 'cd /tmp && git clone https://github.com/ryoogata/cookbooks.git'
 	run 'sudo cp -R /tmp/cookbooks /root/chef-solo'
 end
