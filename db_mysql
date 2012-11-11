@@ -1,0 +1,42 @@
+#############################################################################
+## Settins:
+load 'config.rb'
+
+
+#############################################################################
+## TASKS.
+
+namespace :db_mysql do
+
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Start MySQL Server"
+task :do_start do
+        run 'sudo /etc/init.d/mysqld start'
+end
+
+desc "Stop MySQL Server"
+task :do_stop do
+        run 'sudo /etc/init.d/mysqld stop'
+end
+
+desc "Restart MySQL Server"
+task :do_restart do
+        run 'sudo /etc/init.d/mysqld restart'
+end
+
+end # End of namespace :operationalTask
+
+
+### Boot Task ###
+
+# MySQL 5.5 のインストール
+desc "install "
+task :install_mysql_5_5 do
+        run 'sudo yum -y install mysql mysql-devel mysql-server'
+end
+
+end # End of namespace :db_mysql

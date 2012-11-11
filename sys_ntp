@@ -1,0 +1,17 @@
+#############################################################################
+## Settins:
+load 'config.rb'
+
+
+#############################################################################
+## TASKS.
+
+namespace :sys_ntp do
+
+# Default ( Server のローカルタイムを JST に設定 )
+desc "SYS Timezone set ( JST )"
+task :setup_JST do
+        run 'yes | sudo cp -f /usr/share/zoneinfo/Japan /etc/localtime'
+end
+
+end # namespace :sys_ntp
