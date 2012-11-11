@@ -1,0 +1,52 @@
+##########################################################################
+## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)	
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+
+
+#############################################################################
+## Attribute.
+
+# oinkmaster の Source
+_OINKMASTER_SOURCE = 'oinkmaster-2.0.tar.gz'
+
+
+#############################################################################
+## TASKS.
+
+namespace :oinkmaster do
+
+
+### Boot Task ###
+
+desc "install oinkmaster"
+task :install_oinkmaster do
+	OINKMASTER_DIR = _OINKMASTER_SOURCE.slice(0..13)
+	
+	# oimkmaster のインストール
+	run <<-CMD
+		wget -P /tmp http://sourceforge.net/projects/oinkmaster/files/oinkmaster/2.0/#{_OINKMASTER_SOURCE} &&
+		cd /tmp ; tar xzpf #{_OINKMASTER_SOURCE} &&
+		sudo cp /tmp/#{OINKMASTER_DIR}/oinkmaster.pl /usr/local/bin &&
+		sudo cp /tmp/#{OINKMASTER_DIR}/oinkmaster.conf /etc &&
+		sudo cp /tmp/#{OINKMASTER_DIR}/oinkmaster.1 /usr/share/man/man1	
+	CMD
+
+	# Suricata Rule 用 Directory の作成
+	run 'sudo mkdir -p /etc/suricata/rule'
+
+	# oinkmaster.conf の設定追加
+	RULES_URL = 'url = http://rules.emergingthreats.net/open/suricata/emerging.rules.tar.gz'
+	run <<-CMD
+		sudo sh -c "echo #{RULES_URL} >> /etc/oinkmaster.conf"
+	CMD
+
+	# rule の Download
+	run 'sudo /usr/local/bin/oinkmaster.pl -C /etc/oinkmaster.conf -o /etc/suricata/rule'
+end
+
+end # End of namespace :oinkmaster
