@@ -1,19 +1,16 @@
-#'#########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
-
-# ファイルが存在しているか否かの確認
-# ( 存在しているファイルの参照権限がないと動作しない )
-def remote_file_exists?(full_path)
-  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
-end
+##########################################################################
+## Support.     Amazon Linux AMI 2012.09
+##              AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
 
 
 #############################################################################
-## Settins:
+## Settins.
 load 'config.rb'
+load 'awstool'
+load 'shutdownbuckup'
+load 'sys_ntp'
+load 'web_apache'
+load 'db_mysql'
 
 
 #############################################################################
@@ -39,24 +36,73 @@ set :_ZABBIX_DB_NAME, 'zabbix'
 
 
 #############################################################################
+namespace :serverTemplate do
+
+# Zabbix のクリーンインストール
+desc "Build Zabbix Server"
+task :install do
+	sys_ntp.setup_JST
+	web_apache.install_apache
+	db_mysql.install_mysql_5_5
+	db_mysql.operationalTask.do_start
+	awstool.setup_s3cmd
+	shutdownbuckup.setup_backupS3
+	zabbix.install_zabbix
+	web_apache.operationalTask.do_start
+end
+
+
+# バックアップからのリストア
+desc "Build Zabbix Server"
+task :restore do
+	sys_ntp.setup_JST
+	web_apache.install_apache
+	db_mysql.install_mysql_5_5
+	db_mysql.operationalTask.do_start
+	awstool.setup_s3cmd
+	shutdownbuckup.setup_backupS3
+	zabbix.install_zabbix
+	zabbix.do_dump_import
+	web_apache.operationalTask.do_start
+end
+
+end # End of namespace :serverTemplate
+
+#############################################################################
 ## TASKS.
 
 namespace :zabbix do
 
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "backup zabbix db"
+task :backupdb do
+        # コマンドを実行してる Host 上での date コマンドの出力結果
+        # リモート Host 上での実行結果ではない
+        FILENAME = `date +%Y%m%d%H%M`
+
+	run <<-CMD
+		sudo mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --database #{_ZABBIX_DB_NAME} > /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db &&
+                sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db s3://#{_S3_BUCKETS_NAME} &&
+                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db
+	CMD
+end
+
+end # End of :operationalTask
+
+
+### Boot Task ###
+
 desc "install zabbix 2.0.3"
-task :install do
-
-	# システム時間を日本時間に設定
-	run 'yes | sudo cp -f /usr/share/zoneinfo/Japan /etc/localtime'
-
-
+task :install_zabbix do
 	# 必要なパッケージのインストール
 	packages = %w[
 		php php-bcmath php-gd php-mbstring php-xml php-common php-pdo php-mysql
-		httpd
 		curl curl-devel
 		gcc make
-		mysql mysql-devel mysql-server
 		net-snmp net-snmp-devel net-snmp-utils
 	]
 	run "sudo yum -y install #{packages.join(' ')}"
@@ -91,8 +137,8 @@ task :install do
         MYCNF
 	run 'yes | sudo cp -f /tmp/my.cnf /etc/my.cnf'
 
-	# MySQL の起動
-	run 'sudo /etc/init.d/mysqld start'
+	# MySQL の再起動
+	db_mysql.operationalTask.do_start
 
 	# Zabbix の Source の Download とコンパイル
 	run "wget -P /tmp 'http://downloads.sourceforge.net/project/zabbix/ZABBIX%20Latest%20Stable/2.0.3/zabbix-2.0.3.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fzabbix%2F&ts=1351499277&use_mirror=jaist'"
@@ -109,9 +155,6 @@ task :install do
 		max_input_time = 300
 	PHPINI
 	run 'sudo sh -c "cat /tmp/php.ini >> /etc/php.ini"'
-
-	# httpd の起動
-	run 'sudo /etc/init.d/httpd start'
 
 	# Zabbix 用の DB の Setup
 	run <<-CMD
@@ -153,23 +196,8 @@ task :start_server do
 	run 'sudo service zabbix_server start'
 end
 
-
-desc "backup zabbix db"
-task :backupdb do
-        # コマンドを実行してる Host 上での date コマンドの出力結果
-        # リモート Host 上での実行結果ではない
-        FILENAME = `date +%Y%m%d%H%M`
-
-	run <<-CMD
-		sudo mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --database #{_ZABBIX_DB_NAME} > /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db &&
-                sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db s3://#{_S3_BUCKETS_NAME} &&
-                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db
-	CMD
-end
-
-
 desc "Restore Data from Backuped file in S3 Buckets"
-task :restoredb do
+task :do_dump_import do
         # S3 に保存しているデータを Download して展開
         run <<-CMD
                 # S3 に保存しているデータの Download
