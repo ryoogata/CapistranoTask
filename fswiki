@@ -7,7 +7,6 @@
 ## Settins.
 load 'config.rb'
 load 'awstool'
-load 'shutdownbuckup'
 load 'sys_ntp'
 load 'web_apache'
 
@@ -18,7 +17,7 @@ load 'web_apache'
 # fswiki の本体がインストールされる Directory
 set :_MAIN_DIRECTORY, '/var/www/cgi-bin/wiki'
 
-# バックアップを取得する Directory
+# バックアップを取得する Directory ( awstool:setup_backupconf )
 set :_BACKUP_DIRECTORY, '/opt/wiki'
 
 # バックアップファイルを保存する s3 buckets
@@ -43,11 +42,11 @@ task :install do
 	sys_ntp.setup_JST
 	web_apache.install_apache
 	awstool.setup_s3cmd
-	shutdownbuckup.setup_backupS3
+	awstool.setup_backupconf
+	awstool.do_tar_schedule_enable
+	awstool.setup_backup_script
+	awstool.setup_backupS3
 	fswiki.install_fswiki
-	fswiki.setup_backupconf
-	fswiki.setup_backup_script
-	fswiki.do_tar_schedule_enable
 	web_apache.operationalTask.do_start
 end
 
@@ -58,12 +57,12 @@ task :restore do
 	sys_ntp.setup_JST
 	web_apache.install_apache
 	awstool.setup_s3cmd
-	shutdownbuckup.setup_backupS3
+	awstool.setup_backupconf
+	awstool.do_tar_schedule_enable
+	awstool.setup_backup_script
+	awstool.setup_backupS3
 	fswiki.install_fswiki
-	fswiki.setup_backupconf
-	fswiki.setup_backup_script
-	fswiki.do_tar_import
-	fswiki.do_tar_schedule_enable
+	fswiki.do_tar_restore
 	web_apache.operationalTask.do_start
 end
 
@@ -80,17 +79,9 @@ namespace :fswiki do
 
 namespace :operationalTask do
 
-desc "Backup upload in S3 Buckets"
+desc "Backuped file upload to S3 Buckets"
 task :do_tar_export do
-	# コマンドを実行してる Host 上での date コマンドの出力結果
-	# リモート Host 上での実行結果ではない
-        FILENAME = `date +%Y%m%d%H%M`
-
-        run <<-CMD
-		sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz --files-from /root/backup.conf &&
-		sudo s3cmd -c /root/.s3cfg  put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
-		sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
-        CMD
+	awstool.do_tar_export
 end
 
 end # End of namespace :operationalTask do
@@ -174,19 +165,9 @@ end
 
 
 desc "Restore Data from Backuped file in S3 Buckets"
-task :do_tar_import do
+task :do_tar_restore do
 	# S3 に保存しているデータを Download して展開
-	run <<-CMD
-		# S3 に保存しているデータの Download
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-		| xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz /tmp &&
-		# リストア作業
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-		| xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C /opt &&
-		# ファイルの削除
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-		| xargs -I 'STRINGS' sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz
-	CMD
+	awstool.do_tar_import
 
 	# plugin 用の link を作成
 	run "ls /opt/wiki/plugin | sudo xargs -I 'STRINGS' ln -s /opt/wiki/plugin/'STRINGS' /var/www/cgi-bin/wiki/plugin/'STRINGS'"
@@ -196,42 +177,6 @@ task :do_tar_import do
 		sudo chown -R apache #{_MAIN_DIRECTORY} &&
 		sudo chown -R apache #{_BACKUP_DIRECTORY}
 	CMD
-end
-
-
-# バックアップ設定ファイルの設置
-desc "Setup Backup Configuration"
-task :setup_backupconf do
-        put unindent(<<-CONF), '/tmp/backup.conf'
-		#{_BACKUP_DIRECTORY}
-        CONF
-        run 'sudo mv /tmp/backup.conf /root'
-end
-
-
-# サーバ Shutdown 時に実行する Script の設置
-desc "Setup Backup Script"
-task :setup_backup_script do
-        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
-		#!/bin/sh
-		FILENAME=`date +%Y%m%d%H%M`
-
-		tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf 
-		s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
-		rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
-        SCRIPT
-        run 'sudo mv /tmp/backup2s3.sh /root'
-	run 'sudo chmod +x /root/backup2s3.sh'
-end
-
-
-# cron で Backup を実行するための設定
-desc "Setup cron Backup"
-task :do_tar_schedule_enable  do
-        CRONTAB = '12 23 * * * root /root/backup2s3.sh'
-        run <<-CMD
-                sudo sh -c "echo #{CRONTAB} >> /etc/crontab"
-        CMD
 end
 
 end	# End of namespace :fswiki
