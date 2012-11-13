@@ -1,6 +1,6 @@
 ##########################################################################
-## Support.     Amazon Linux AMI 2012.09
-##              AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+##
 
 
 #############################################################################
@@ -19,16 +19,24 @@ load 'db_mysql'
 # バックアップファイルを保存する s3 buckets
 set :_S3_BUCKETS_NAME, 'ogata_buckets'
 
+# バックアップを取得する Directory ( awstool:setup_backupconf )
+set :_BACKUP_DIRECTORY, '/usr/local/etc'
+
 # バックアップするファイル名の Prefix
 # バックアップファイルは Prefix + date の形式で保存される
+# ( e.g zabbix201210262316.tgz )
+set :_BACKUPED_FILE_PREFIX, 'zabbix_office'
+
+# バックアップする DB の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
 # ( e.g zabbixdb201210262316.tgz )
-set :_BACKUPED_FILE_PREFIX, 'zabbixdb'
+set :_BACKUPED_DB_PREFIX, 'zabbix_office'
 
 # Zabbix 用 DB を操作するユーザ名
 set :_ZABBIX_DB_USER, 'zabbix'
 
-# Zabbix 用 DB を操作する DB 名
-set :_ZABBIX_DB_NAME, 'zabbix'
+# Zabbix 用 DB 名
+set :_DB_NAME, 'zabbix'
 
 # 下記 Attribute は config.rb に記載している
 # zabbix 用 DB パスワード
@@ -41,12 +49,15 @@ namespace :serverTemplate do
 # Zabbix のクリーンインストール
 desc "Build Zabbix Server"
 task :install do
-	sys_ntp.setup_JST
+        sys_ntp.setup_JST
+        awstool.setup_s3cmd
+        awstool.setup_backupconf
+        awstool.setup_shutdowntime_backup_file_and_db_script
+        awstool.setup_shutdowntime_backup_to_S3
+        awstool.do_tar_schedule_enable
 	web_apache.install_apache
 	db_mysql.install_mysql_5_5
 	db_mysql.operationalTask.do_start
-	awstool.setup_s3cmd
-	shutdownbuckup.setup_backupS3
 	zabbix.install_zabbix
 	web_apache.operationalTask.do_start
 end
@@ -55,14 +66,17 @@ end
 # バックアップからのリストア
 desc "Build Zabbix Server"
 task :restore do
-	sys_ntp.setup_JST
+        sys_ntp.setup_JST
+        awstool.setup_s3cmd
+        awstool.setup_backupconf
+        awstool.setup_shutdowntime_backup_file_and_db_script
+        awstool.setup_shutdowntime_backup_to_S3
+        awstool.do_tar_schedule_enable
 	web_apache.install_apache
 	db_mysql.install_mysql_5_5
 	db_mysql.operationalTask.do_start
-	awstool.setup_s3cmd
-	shutdownbuckup.setup_backupS3
 	zabbix.install_zabbix
-	zabbix.do_dump_import
+	zabbix.do_tar_and_dump_import
 	web_apache.operationalTask.do_start
 end
 
@@ -78,17 +92,10 @@ namespace :zabbix do
 
 namespace :operationalTask do
 
-desc "backup zabbix db"
-task :backupdb do
-        # コマンドを実行してる Host 上での date コマンドの出力結果
-        # リモート Host 上での実行結果ではない
-        FILENAME = `date +%Y%m%d%H%M`
-
-	run <<-CMD
-		sudo mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --database #{_ZABBIX_DB_NAME} > /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db &&
-                sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db s3://#{_S3_BUCKETS_NAME} &&
-                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db
-	CMD
+desc "Backup Data & DB"
+task :do_tar_and_dump_export do
+	awstool.do_tar_export
+	db_mysql.operationalTask.do_dump_export
 end
 
 end # End of :operationalTask
@@ -158,11 +165,11 @@ task :install_zabbix do
 
 	# Zabbix 用の DB の Setup
 	run <<-CMD
-		sudo echo 'create database #{_ZABBIX_DB_NAME}' | mysql -u root &&
-		echo "grant all privileges on #{_ZABBIX_DB_NAME}.* to #{_ZABBIX_DB_USER}@localhost identified by '#{_ZABBIX_DB_PASSWORD}';" | mysql -u root &&
-		cat /tmp/zabbix-2.0.3/database/mysql/schema.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_ZABBIX_DB_NAME} &&
-		cat /tmp/zabbix-2.0.3/database/mysql/images.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_ZABBIX_DB_NAME} &&
-		cat /tmp/zabbix-2.0.3/database/mysql/data.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_ZABBIX_DB_NAME}
+		sudo echo 'create database #{_DB_NAME}' | mysql -u root &&
+		echo "grant all privileges on #{_DB_NAME}.* to #{_ZABBIX_DB_USER}@localhost identified by '#{_ZABBIX_DB_PASSWORD}';" | mysql -u root &&
+		cat /tmp/zabbix-2.0.3/database/mysql/schema.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME} &&
+		cat /tmp/zabbix-2.0.3/database/mysql/images.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME} &&
+		cat /tmp/zabbix-2.0.3/database/mysql/data.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME}
 	CMD
 
 	# /var/www/html/zabbix の準備
@@ -191,32 +198,32 @@ task :install_zabbix do
 
 end
 
+
 desc ""
 task :start_server do
 	run 'sudo service zabbix_server start'
 end
 
+
 desc "Restore Data from Backuped file in S3 Buckets"
-task :do_dump_import do
+task :do_tar_and_dump_import do
+        # S3 に保存しているデータを Download して展開
+        awstool.do_tar_import
+
         # S3 に保存しているデータを Download して展開
         run <<-CMD
-                # S3 に保存しているデータの Download
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.db//' | sort -r | head -n 1 \
-                | xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.db /tmp  &&
-
 		# zabbix_server の停止
 		sudo service zabbix_server stop &&
 
 		# DB の削除
-                sudo echo 'drop database #{_ZABBIX_DB_NAME}' | mysql -u root &&
+                sudo echo 'drop database #{_DB_NAME}' | mysql -u root &&
 
 		# DB の作成
-                sudo echo 'create database #{_ZABBIX_DB_NAME}' | mysql -u root &&
-
-                # リストア作業
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.db//' | sort -r | head -n 1 \
-                | xargs -I 'STRINGS' sudo sh -c "mysql zabbix < /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.db"
+                sudo echo 'create database #{_DB_NAME}' | mysql -u root
         CMD
+	
+	# DB のリストア
+	db_mysql.operationalTask.do_dump_import
 end
 
 end # End of namespace :zabbix
