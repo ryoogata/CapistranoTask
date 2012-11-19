@@ -11,6 +11,9 @@ load 'config.rb'
 #############################################################################
 ## Attribute.
 
+# Request Tracker の Source の選択
+set :_S3FS_SOURCE, 's3fs-1.61.tar.gz'
+
 # 下記 Attribute は config.rb に記載している
 #set :_ACCESS_KEY
 #set :_SECRET_KEY
@@ -23,7 +26,112 @@ load 'config.rb'
 
 namespace :awstool do
 
-desc "awstool: Install AWS CERT & PRIVATE_KEY"
+# バックアップ設定ファイルの設置
+desc "Setup Backup Configuration"
+task :setup_backupconf do
+        put unindent(<<-CONF), '/tmp/backup.conf'
+                #{_BACKUP_DIRECTORY.sub(/,/, "\n")}
+        CONF
+        run 'sudo mv /tmp/backup.conf /root'
+end
+
+
+# cron で Backup を実行するための設定
+desc "Setup cron Backup"
+task :do_tar_schedule_enable  do
+        CRONTAB = '12 23 * * * root /root/backup2s3.sh'
+        run <<-CMD
+                sudo sh -c "echo #{CRONTAB} >> /etc/crontab"
+        CMD
+end
+
+
+
+##########################################################################
+# サーバ Shutdown 時に実行する Script の設置
+
+desc "Setup Backup File Script"
+task :setup_backup_file_script do
+        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
+                #!/bin/sh
+                FILENAME=`date +%Y%m%d%H%M`
+
+                tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
+                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
+        SCRIPT
+        run 'sudo mv /tmp/backup2s3.sh /root'
+        run 'sudo chmod +x /root/backup2s3.sh'
+end
+
+
+desc "Setup Backup DB Script"
+task :setup_backup_db_script do
+        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
+                #!/bin/sh
+                FILENAME=`date +%Y%m%d%H%M`
+
+                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db &&
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db s3://#{_S3_BUCKETS_NAME} &&
+                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
+        SCRIPT
+        run 'sudo mv /tmp/backup2s3.sh /root'
+        run 'sudo chmod +x /root/backup2s3.sh'
+end
+
+
+desc "Setup Backup File and DB Script"
+task :setup_backup_file_and_db_script do
+        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
+                #!/bin/sh
+                FILENAME=`date +%Y%m%d%H%M`
+
+                tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
+                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
+
+                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db s3://#{_S3_BUCKETS_NAME}
+                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
+        SCRIPT
+        run 'sudo mv /tmp/backup2s3.sh /root'
+        run 'sudo chmod +x /root/backup2s3.sh'
+end
+
+
+# /root/backup.conf の内容を元に、tar で圧縮し S3 に Upload する
+desc "Backup upload in S3 Buckets"
+task :do_tar_export do
+        # コマンドを実行してる Host 上での date コマンドの出力結果
+        # リモート Host 上での実行結果ではない
+        FILENAME = `date +%Y%m%d%H%M`
+
+        run <<-CMD
+                sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz --files-from /root/backup.conf &&
+                sudo s3cmd -c /root/.s3cfg  put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
+                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
+        CMD
+end
+
+
+# S3 に保存しているデータを Download して展開
+desc "Inport backuped file via S3 buckets"
+task :do_tar_import do
+        run <<-CMD
+                # S3 に保存しているデータの Download
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz /tmp &&
+                # リストア作業
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C / &&
+                # ファイルの削除
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -I 'STRINGS' sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz
+        CMD
+end
+
+
+desc "Install AWS CERT & PRIVATE_KEY"
 task :setup_pem_root do
 	put unindent(<<-CERT), '/tmp/cert.pem'
 		-----BEGIN CERTIFICATE-----
@@ -42,11 +150,41 @@ task :setup_pem_root do
 	run 'echo EC2_PRIVATE_KEY=/root/pk.pem | sudo tee -a /root/.bash_profile'
 	run 'echo EC2_CERT=/root/cert.pem | sudo tee -a /root/.bash_profile'
 	run 'echo EC2_URL=https://ec2.us-west-1.amazonaws.com | sudo tee -a /root/.bash_profile'
-	run 'echo export EC2_PRIVATE_KEY EC2_CERT | sudo tee -a /root/.bash_profile'
+	run 'echo export EC2_PRIVATE_KEY EC2_CERT EC2_URL | sudo tee -a /root/.bash_profile'
 end
 
 
-desc "awstool: Install s3cmd & setup"
+desc "Install s3fs & setup"
+task :setup_s3fs do
+	S3FS_DIRECTORY = _S3FS_SOURCE.sub(".tar.gz","")
+
+        # 事前に必要なパッケージをインストール
+        packages = %w[
+		fuse fuse-devel 
+		gcc-c++ make
+		curl-devel libxml2-devel openssl-devel
+        ]
+        run "sudo yum -y install #{packages.join(' ')}"
+
+	#s3fs の Download とインストール
+        run <<-CMD
+		wget -P /tmp 'http://s3fs.googlecode.com/files/#{_S3FS_SOURCE}' &&
+		cd /tmp ; tar xzpf #{_S3FS_SOURCE} &&
+		cd /tmp/#{S3FS_DIRECTORY} ; ./configure ; make ; sudo make install
+	CMD
+
+	put unindent(<<-CONF), '/tmp/passwd-s3fs'
+		#{_ACCESS_KEY}:#{_SECRET_KEY}
+	CONF
+	run 'sudo mv /tmp/passwd-s3fs /etc'
+	run 'sudo chown root:root /etc/passwd-s3fs'
+	run 'sudo chmod 600 /etc/passwd-s3fs'
+
+	#s3fs spriggan_buckets /s3 -o default_acl=public-read
+end
+
+
+desc "Install s3cmd & setup"
 task :setup_s3cmd do
 	# python-magic のインストール
 	run 'sudo yum -y install python-magic'
@@ -108,6 +246,59 @@ task :setup_s3cmd do
        	run 'sudo mv /tmp/.s3cfg /root'
 	run 'sudo chown root:root /root/.s3cfg'
 	run 'sudo chmod 600 /root/.s3cfg'
+end
+
+
+# サーバ Shutdown 時に backup script が実行されるように設定
+desc "Setup Shutdown time run backup script"
+task :setup_shutdowntime_run_backupscript do
+	# /etc/init.d に設置する Script の設置
+        put unindent(<<-'SCRIPT'), '/tmp/backup2s3'
+		#!/bin/bash  
+		#  
+		# backup2s3        Backup to S3.  
+		#  
+		# chkconfig: 2345 99 10  
+		# description: Backup to S3  
+   
+		# Source function library.  
+		. /etc/init.d/functions  
+   
+		prog=backup2s3  
+		exec=/root/${prog}.sh  
+		log=/root/${prog}.log  
+		lock=/var/lock/subsys/$prog  
+   
+		# Source config  
+		if [ -f /etc/sysconfig/$prog ] ; then  
+   		. /etc/sysconfig/$prog  
+		fi  
+   
+		case "$1" in  
+		start)  
+		       touch $lock  
+		       ;;  
+ 		stop)  
+		       $exec >> $log 2>&1  
+		       rm -f $lock  
+		       ;;  
+		restart)  
+		       ;;  
+		*)  
+       		echo $"Usage: $0 {start|stop}"  
+       		exit 2  
+		esac  
+   
+		exit $?  
+        SCRIPT
+        run 'sudo mv /tmp/backup2s3 /etc/init.d/backup2s3'
+	run 'sudo chmod 755 /etc/init.d/backup2s3'
+	run 'sudo chown root:root /etc/init.d/backup2s3'
+
+	# backup2s3 の自動起動化 ( 実際に backup2s3 のサービスは開始しない )
+	run 'sudo chkconfig --add backup2s3'
+	run 'sudo chkconfig backup2s3 on'
+	run 'sudo /etc/init.d/backup2s3 start'
 end
 
 end # End of namespace :awstool
