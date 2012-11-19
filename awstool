@@ -46,59 +46,6 @@ task :do_tar_schedule_enable  do
 end
 
 
-
-##########################################################################
-# サーバ Shutdown 時に実行する Script の設置
-
-desc "Setup Backup File Script"
-task :setup_backup_file_script do
-        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
-                #!/bin/sh
-                FILENAME=`date +%Y%m%d%H%M`
-
-                tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
-                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
-                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
-        SCRIPT
-        run 'sudo mv /tmp/backup2s3.sh /root'
-        run 'sudo chmod +x /root/backup2s3.sh'
-end
-
-
-desc "Setup Backup DB Script"
-task :setup_backup_db_script do
-        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
-                #!/bin/sh
-                FILENAME=`date +%Y%m%d%H%M`
-
-                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db &&
-                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db s3://#{_S3_BUCKETS_NAME} &&
-                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
-        SCRIPT
-        run 'sudo mv /tmp/backup2s3.sh /root'
-        run 'sudo chmod +x /root/backup2s3.sh'
-end
-
-
-desc "Setup Backup File and DB Script"
-task :setup_backup_file_and_db_script do
-        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
-                #!/bin/sh
-                FILENAME=`date +%Y%m%d%H%M`
-
-                tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
-                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
-                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
-
-                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
-                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db s3://#{_S3_BUCKETS_NAME}
-                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
-        SCRIPT
-        run 'sudo mv /tmp/backup2s3.sh /root'
-        run 'sudo chmod +x /root/backup2s3.sh'
-end
-
-
 # /root/backup.conf の内容を元に、tar で圧縮し S3 に Upload する
 desc "Backup upload in S3 Buckets"
 task :do_tar_export do
@@ -131,6 +78,7 @@ task :do_tar_import do
 end
 
 
+# ec2 コマンドを実行するための設定
 desc "Install AWS CERT & PRIVATE_KEY"
 task :setup_pem_root do
 	put unindent(<<-CERT), '/tmp/cert.pem'
@@ -154,6 +102,7 @@ task :setup_pem_root do
 end
 
 
+# s3fs のセットアップ
 desc "Install s3fs & setup"
 task :setup_s3fs do
 	S3FS_DIRECTORY = _S3FS_SOURCE.sub(".tar.gz","")
@@ -184,6 +133,7 @@ task :setup_s3fs do
 end
 
 
+# s3cmd のセットアップ
 desc "Install s3cmd & setup"
 task :setup_s3cmd do
 	# python-magic のインストール
@@ -299,6 +249,61 @@ task :setup_shutdowntime_run_backupscript do
 	run 'sudo chkconfig --add backup2s3'
 	run 'sudo chkconfig backup2s3 on'
 	run 'sudo /etc/init.d/backup2s3 start'
+end
+
+
+##########################################################################
+## サーバ Shutdown 時に実行する Script の設置
+
+# ファイルのバックアップを行う際の Script
+desc "Setup Backup File Script"
+task :setup_backup_file_script do
+        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
+                #!/bin/sh
+                FILENAME=`date +%Y%m%d%H%M`
+
+                tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
+                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
+        SCRIPT
+        run 'sudo mv /tmp/backup2s3.sh /root'
+        run 'sudo chmod +x /root/backup2s3.sh'
+end
+
+
+# DB のバックアップを行う際の Script
+desc "Setup Backup DB Script"
+task :setup_backup_db_script do
+        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
+                #!/bin/sh
+                FILENAME=`date +%Y%m%d%H%M`
+
+                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db &&
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db s3://#{_S3_BUCKETS_NAME} &&
+                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
+        SCRIPT
+        run 'sudo mv /tmp/backup2s3.sh /root'
+        run 'sudo chmod +x /root/backup2s3.sh'
+end
+
+
+# ファイルも DB のバックアップも行う際の Script
+desc "Setup Backup File and DB Script"
+task :setup_backup_file_and_db_script do
+        put unindent(<<-SCRIPT), '/tmp/backup2s3.sh'
+                #!/bin/sh
+                FILENAME=`date +%Y%m%d%H%M`
+
+                tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
+                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
+
+                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db s3://#{_S3_BUCKETS_NAME}
+                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
+        SCRIPT
+        run 'sudo mv /tmp/backup2s3.sh /root'
+        run 'sudo chmod +x /root/backup2s3.sh'
 end
 
 end # End of namespace :awstool
