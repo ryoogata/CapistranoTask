@@ -11,9 +11,6 @@ load 'config.rb'
 #############################################################################
 ## Attribute.
 
-# Request Tracker の Source の選択
-set :_S3FS_SOURCE, 's3fs-1.61.tar.gz'
-
 # 下記 Attribute は config.rb に記載している
 #set :_ACCESS_KEY
 #set :_SECRET_KEY
@@ -33,6 +30,16 @@ task :setup_backupconf do
                 #{_BACKUP_DIRECTORY.sub(/,/, "\n")}
         CONF
         run 'sudo mv /tmp/backup.conf /root'
+end
+
+
+# バックアップ除外設定ファイルの設置
+desc "Setup Exclude Backup Configuration"
+task :setup_excludeconf do
+        put unindent(<<-CONF), '/tmp/exclude.conf'
+                #{_EXCLUDE_DIRECTORY.sub(/,/, "\n")}
+        CONF
+        run 'sudo mv /tmp/exclude.conf /root'
 end
 
 
@@ -101,25 +108,23 @@ task :setup_pem_root do
 	run 'echo export EC2_PRIVATE_KEY EC2_CERT EC2_URL | sudo tee -a /root/.bash_profile'
 end
 
-
 # s3fs のセットアップ
+# ( 本家の s3fs だと s3 のディレクトリが見えないバグがあるので、cloudpack の修正版を利用 )
 desc "Install s3fs & setup"
 task :setup_s3fs do
-	S3FS_DIRECTORY = _S3FS_SOURCE.sub(".tar.gz","")
-
         # 事前に必要なパッケージをインストール
         packages = %w[
 		fuse fuse-devel 
 		gcc-c++ make
 		curl-devel libxml2-devel openssl-devel
+		git
         ]
         run "sudo yum -y install #{packages.join(' ')}"
 
 	#s3fs の Download とインストール
         run <<-CMD
-		wget -P /tmp 'http://s3fs.googlecode.com/files/#{_S3FS_SOURCE}' &&
-		cd /tmp ; tar xzpf #{_S3FS_SOURCE} &&
-		cd /tmp/#{S3FS_DIRECTORY} ; ./configure ; make ; sudo make install
+		git clone git://github.com/memorycraft/s3fs-cloudpack.git /tmp/s3fs-cloudpack &&
+		cd /tmp/s3fs-cloudpack ; sh ./configure ; make ; sudo make install
 	CMD
 
 	put unindent(<<-CONF), '/tmp/passwd-s3fs'
@@ -129,7 +134,7 @@ task :setup_s3fs do
 	run 'sudo chown root:root /etc/passwd-s3fs'
 	run 'sudo chmod 600 /etc/passwd-s3fs'
 
-	#s3fs spriggan_buckets /s3 -o default_acl=public-read
+	#s3fs blog.yggdrasillnetwork.net /var/www/html/yggdrasill_network_blog -o default_acl=public-read
 end
 
 
@@ -262,7 +267,12 @@ task :setup_backup_file_script do
                 #!/bin/sh
                 FILENAME=`date +%Y%m%d%H%M`
 
-                tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+		if [ -f /root/exclude.conf ]; then
+                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf --exclude-from /root/exclude.conf
+		else
+                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+		fi
+			
                 s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
                 rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
         SCRIPT
@@ -294,7 +304,11 @@ task :setup_backup_file_and_db_script do
                 #!/bin/sh
                 FILENAME=`date +%Y%m%d%H%M`
 
-                tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+		if [ -f /root/exclude.conf ]; then
+                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf --exclude-from /root/exclude.conf
+		else
+                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+		fi
                 s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
                 rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
 
