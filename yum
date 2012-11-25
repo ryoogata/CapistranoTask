@@ -12,7 +12,7 @@ namespace :yum do
 desc "default: Setup CentOS epel Repository ( x86_64 )"
 task :setup_epel do
   run <<-CMD
-    rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm
+    sudo rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm
   CMD
 end
 
@@ -21,7 +21,7 @@ end
 desc "default: Setup CentOS rpmforge Repository ( x86_64 )"
 task :setup_rpmforge do
   run <<-CMD
-    rpm -Uv http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm
+    sudo rpm -Uv http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm
   CMD
 end
 
@@ -30,7 +30,7 @@ end
 desc "default: execute yum update"
 task :yum_update do
   run <<-CMD
-    yum update -y
+    sudo yum update -y
   CMD
 end
 
