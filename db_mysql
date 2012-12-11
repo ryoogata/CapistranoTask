@@ -18,15 +18,55 @@ task :do_start do
         run 'sudo /etc/init.d/mysqld start'
 end
 
+
 desc "Stop MySQL Server"
 task :do_stop do
         run 'sudo /etc/init.d/mysqld stop'
 end
 
+
 desc "Restart MySQL Server"
 task :do_restart do
         run 'sudo /etc/init.d/mysqld restart'
 end
+
+
+desc "Create DB"
+task :create_db do
+	run <<-CMD
+	# DB の作成
+		sudo echo 'create database #{_DB_NAME}' | mysql -u root
+	CMD
+end
+
+
+desc "Backup DB"
+task :do_dump_export do
+	# コマンドを実行してる Host 上での date コマンドの出力結果
+	# リモート Host 上での実行結果ではない
+	FILENAME = `date +%Y%m%d%H%M`
+
+	run <<-CMD
+		sudo mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --database mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}#{FILENAME}.db &&
+		sudo s3cmd put /tmp/#{_BACKUPED_DB_PREFIX}#{FILENAME}.db s3://#{_S3_BUCKETS_NAME} &&
+		sudo rm -rf /tmp/#{_BACKUPED_DB_PREFIX}#{FILENAME}.db
+	CMD
+end
+
+
+desc "Restore DB"
+task :do_dump_import do
+	run <<-CMD
+		# S3 に保存しているデータの Download
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX} | grep db | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_DB_PREFIX}//' | sed 's/.db//' | sort -r | head -n 1 \
+		| xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}'STRINGS'.db /tmp  &&
+
+		# リストア作業
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX} | grep db | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_DB_PREFIX}//' | sed 's/.db//' | sort -r | head -n 1 \
+		| xargs -I 'STRINGS' sudo sh -c "mysql < /tmp/#{_BACKUPED_DB_PREFIX}'STRINGS'.db"
+	CMD
+end
+
 
 end # End of namespace :operationalTask
 
@@ -34,9 +74,10 @@ end # End of namespace :operationalTask
 ### Boot Task ###
 
 # MySQL 5.5 のインストール
-desc "install "
+desc "Install MySQL 5.5"
 task :install_mysql_5_5 do
         run 'sudo yum -y install mysql mysql-devel mysql-server'
+	run 'sudo chkconfig mysqld on'
 end
 
 end # End of namespace :db_mysql
