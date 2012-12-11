@@ -7,7 +7,6 @@
 ## Settins.
 load 'config.rb'
 load 'awstool'
-load 'shutdownbuckup'
 load 'sys_ntp'
 load 'web_apache'
 load 'db_mysql'
@@ -51,10 +50,10 @@ desc "Build Zabbix Server"
 task :install do
         sys_ntp.setup_JST
         awstool.setup_s3cmd
-        awstool.setup_backupconf
-        awstool.setup_shutdowntime_backup_file_and_db_script
-        awstool.setup_shutdowntime_backup_to_S3
-        awstool.do_tar_schedule_enable
+        #awstool.setup_backupconf
+        #awstool.setup_backup_file_and_db_script
+        #awstool.setup_shutdowntime_run_backupscript
+        #awstool.do_tar_schedule_enable
 	web_apache.install_apache
 	db_mysql.install_mysql_5_5
 	db_mysql.operationalTask.do_start
@@ -63,14 +62,14 @@ task :install do
 end
 
 
-# バックアップからのリストア
+# バックアップからのリストア ( Work )
 desc "Build Zabbix Server"
 task :restore do
         sys_ntp.setup_JST
         awstool.setup_s3cmd
         awstool.setup_backupconf
-        awstool.setup_shutdowntime_backup_file_and_db_script
-        awstool.setup_shutdowntime_backup_to_S3
+        awstool.setup_backup_file_and_db_script
+        awstool.setup_shutdowntime_run_backupscript
         awstool.do_tar_schedule_enable
 	web_apache.install_apache
 	db_mysql.install_mysql_5_5
@@ -111,6 +110,7 @@ task :install_zabbix do
 		curl curl-devel
 		gcc make
 		net-snmp net-snmp-devel net-snmp-utils
+		ipa-gothic-fonts
 	]
 	run "sudo yum -y install #{packages.join(' ')}"
 
@@ -196,6 +196,13 @@ task :install_zabbix do
 	# Username: Admin
 	# Password: zabbix
 
+	# 日本語 Font の設定
+	# /var/www/html/zabbix/fonts に ipag.ttf をコピー
+	run 'sudo cp /usr/share/fonts/ipa-gothic/ipag.ttf /var/www/html/zabbix/fonts/'
+	# /var/www/html/zabbix/include/defines.inc.php の DejaVuSans を ipag に置換
+	#    ZBX_GRAPH_FONT_NAME のところ
+	#run 'sudo sed -i "s/'DejaVuSans'); \/\//'ipag'); \/\//" /var/www/html/zabbix/include/defines.inc.php'
+
 end
 
 
@@ -224,6 +231,18 @@ task :do_tar_and_dump_import do
 	
 	# DB のリストア
 	db_mysql.operationalTask.do_dump_import
+end
+
+task :puts_messages do
+        # インスタンスに割り当てられている Public の Hostname を取得
+        PUBLIC_DNS = capture("curl http://169.254.169.254/latest/meta-data/public-hostname")
+
+        # メッセージの出力
+        puts
+        puts "http://#{PUBLIC_DNS}/zabbix"
+        puts "Username: Admin"
+        puts "Password: zabbix"
+        puts
 end
 
 end # End of namespace :zabbix
