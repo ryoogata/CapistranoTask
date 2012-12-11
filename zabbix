@@ -37,6 +37,8 @@ set :_ZABBIX_DB_USER, 'zabbix'
 # Zabbix 用 DB 名
 set :_DB_NAME, 'zabbix'
 
+set :_ZABBIX_VERSION, '2.0.4'
+
 # 下記 Attribute は config.rb に記載している
 # zabbix 用 DB パスワード
 # set :_ZABBIX_DB_PASSWORD
@@ -50,10 +52,10 @@ desc "Build Zabbix Server"
 task :install do
         sys_ntp.setup_JST
         awstool.setup_s3cmd
-        #awstool.setup_backupconf
-        #awstool.setup_backup_file_and_db_script
-        #awstool.setup_shutdowntime_run_backupscript
-        #awstool.do_tar_schedule_enable
+        awstool.setup_backupconf
+        awstool.setup_backup_file_and_db_script
+        awstool.setup_shutdowntime_run_backupscript
+        awstool.do_tar_schedule_enable
 	web_apache.install_apache
 	db_mysql.install_mysql_5_5
 	db_mysql.operationalTask.do_start
@@ -102,7 +104,6 @@ end # End of :operationalTask
 
 ### Boot Task ###
 
-desc "install zabbix 2.0.3"
 task :install_zabbix do
 	# 必要なパッケージのインストール
 	packages = %w[
@@ -148,11 +149,11 @@ task :install_zabbix do
 	db_mysql.operationalTask.do_start
 
 	# Zabbix の Source の Download とコンパイル
-	run "wget -P /tmp 'http://downloads.sourceforge.net/project/zabbix/ZABBIX%20Latest%20Stable/2.0.3/zabbix-2.0.3.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fzabbix%2F&ts=1351499277&use_mirror=jaist'"
-	run 'tar xzpvf /tmp/zabbix-2.0.3.tar.gz -C /tmp'
-	run 'cd /tmp/zabbix-2.0.3 ; ./configure --with-net-snmp --enable-server --enable-agent --with-mysql=/usr/lib64/mysql/mysql_config'
-	run 'cd /tmp/zabbix-2.0.3 ; make'
-	run 'cd /tmp/zabbix-2.0.3 ; sudo make install'
+	run "wget -P /tmp 'http://downloads.sourceforge.net/project/zabbix/ZABBIX%20Latest%20Stable/#{_ZABBIX_VERSION}/zabbix-#{_ZABBIX_VERSION}.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fzabbix%2F&ts=1351499277&use_mirror=jaist'"
+	run "tar xzpvf /tmp/zabbix-#{_ZABBIX_VERSION}.tar.gz -C /tmp"
+	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; ./configure --with-net-snmp --enable-server --enable-agent --with-mysql=/usr/lib64/mysql/mysql_config"
+	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; make"
+	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; sudo make install"
 
 	# /etc/php.ini の設定
         put unindent(<<-'PHPINI'), '/tmp/php.ini'
@@ -167,21 +168,21 @@ task :install_zabbix do
 	run <<-CMD
 		sudo echo 'create database #{_DB_NAME}' | mysql -u root &&
 		echo "grant all privileges on #{_DB_NAME}.* to #{_ZABBIX_DB_USER}@localhost identified by '#{_ZABBIX_DB_PASSWORD}';" | mysql -u root &&
-		cat /tmp/zabbix-2.0.3/database/mysql/schema.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME} &&
-		cat /tmp/zabbix-2.0.3/database/mysql/images.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME} &&
-		cat /tmp/zabbix-2.0.3/database/mysql/data.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME}
+		cat /tmp/zabbix-#{_ZABBIX_VERSION}/database/mysql/schema.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME} &&
+		cat /tmp/zabbix-#{_ZABBIX_VERSION}/database/mysql/images.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME} &&
+		cat /tmp/zabbix-#{_ZABBIX_VERSION}/database/mysql/data.sql | mysql -u #{_ZABBIX_DB_USER} -p#{_ZABBIX_DB_PASSWORD} #{_DB_NAME}
 	CMD
 
 	# /var/www/html/zabbix の準備
-	run 'sudo cp -rf /tmp/zabbix-2.0.3/frontends/php /var/www/html/zabbix'	
+	run "sudo cp -rf /tmp/zabbix-#{_ZABBIX_VERSION}/frontends/php /var/www/html/zabbix"
 	run 'sudo chown -R apache /var/www/html'
 
 	# zabbix_server 用のユーザ ( zabbix ) を追加
 	run 'sudo adduser zabbix'
 
 	# zabbix_server と zabbix_agentd の起動準備と起動
-	run 'sudo cp /tmp/zabbix-2.0.3/misc/init.d/fedora/core5/zabbix_server /etc/init.d/'
-	run 'sudo cp /tmp/zabbix-2.0.3/misc/init.d/fedora/core5/zabbix_agentd /etc/init.d/'
+	run "sudo cp /tmp/zabbix-#{_ZABBIX_VERSION}/misc/init.d/fedora/core5/zabbix_server /etc/init.d/"
+	run "sudo cp /tmp/zabbix-#{_ZABBIX_VERSION}/misc/init.d/fedora/core5/zabbix_agentd /etc/init.d/"
 
 	# chkconfig の設定
 	run 'sudo chkconfig --add zabbix_server'
@@ -192,21 +193,13 @@ task :install_zabbix do
 	run 'sudo service zabbix_server start'
 	run 'sudo service zabbix_agentd start'
 
-	# http://<Instance Public DNS>/zabbix
-	# Username: Admin
-	# Password: zabbix
-
 	# 日本語 Font の設定
 	# /var/www/html/zabbix/fonts に ipag.ttf をコピー
 	run 'sudo cp /usr/share/fonts/ipa-gothic/ipag.ttf /var/www/html/zabbix/fonts/'
 	# /var/www/html/zabbix/include/defines.inc.php の DejaVuSans を ipag に置換
-	#    ZBX_GRAPH_FONT_NAME のところ
-	#run 'sudo sed -i "s/'DejaVuSans'); \/\//'ipag'); \/\//" /var/www/html/zabbix/include/defines.inc.php'
-
+	run 'sudo sed -i "s/\'DejaVuSans\'); \/\//\'ipag\'); \/\//" /var/www/html/zabbix/include/defines.inc.php'
 end
 
-
-desc ""
 task :start_server do
 	run 'sudo service zabbix_server start'
 end
