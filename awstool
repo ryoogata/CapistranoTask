@@ -146,7 +146,8 @@ task :setup_s3cmd do
 
 	# s3cmd の Download とインストール
 	unless remote_file_exists?("/tmp/s3cmd-1.1.0-beta3.zip")
-		run "wget -P /tmp 'http://downloads.sourceforge.net/project/s3tools/s3cmd/1.1.0-beta3/s3cmd-1.1.0-beta3.zip?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fs3tools%2Ffiles%2Fs3cmd%2F1.1.0-beta3%2F&ts=1351065122&use_mirror=jaist'"
+		#run "wget -P /tmp 'http://downloads.sourceforge.net/project/s3tools/s3cmd/1.1.0-beta3/s3cmd-1.1.0-beta3.zip?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fs3tools%2Ffiles%2Fs3cmd%2F1.1.0-beta3%2F&ts=1351065122&use_mirror=jaist'"
+		run "wget -P /tmp 'https://s3.amazonaws.com/capistrano_files/s3cmd-1.1.0-beta3.zip'"
 		run 'unzip -n -d /tmp /tmp/s3cmd-1.1.0-beta3.zip'
 		run 'cd /tmp/s3cmd-1.1.0-beta3 ; sudo python setup.py install'
 	end
