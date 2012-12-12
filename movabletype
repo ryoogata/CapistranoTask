@@ -1,31 +1,47 @@
 ##########################################################################
-## Support.     Amazon Linux AMI 2012.09
-##              AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+## Build estimate: 10 minute (serverTemplate:install)[t1.micro]
 
 
 #############################################################################
 ## Settins.
 load 'config.rb'
 load 'awstool'
-load 'shutdownbuckup'
 load 'sys_ntp'
 load 'web_apache'
 load 'db_mysql'
+load 'yum'
 
 
 #############################################################################
 ## Attribute.
 
-# バックアップファイルを保存する s3 buckets
+# バックアップファイルを保存する S3 buckets
 set :_S3_BUCKETS_NAME, 'ogata_buckets'
+
+# バックアップする DB の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g mt_database201210262316.tgz )
+set :_BACKUPED_DB_PREFIX, 'mt_database'
+
+# バックアップを取得する Directory ( awstool:setup_backupconf )
+set :_BACKUP_DIRECTORY, '/var/www/cgi-bin/mt'
+
 
 # バックアップするファイル名の Prefix
 # バックアップファイルは Prefix + date の形式で保存される
-# ( e.g mtdb201210262316.tgz )
-set :_BACKUPED_FILE_PREFIX, 'movabletypedb'
+# ( e.g mt_cgibin201210262316.tgz )
+set :_BACKUPED_FILE_PREFIX, 'mt_cgibin'
+
 
 # Movable Type 用 DB 名 
-set :_MOVABLETYPE_DB_NAME, 'mt'
+set :_DB_NAME, 'mt'
+
+# s3fs で Mount する元 Directory
+set :_S3FS_DIRECTORY, '/var/www/html/yggdrasill_network_blog'
+
+# ブログを公開する S3 buckets
+set :_PUBLIC_S3, 'blog.yggdrasillnetwork.net'
 
 
 #############################################################################
@@ -34,13 +50,46 @@ namespace :serverTemplate do
 # MovableType のクリーンインストール
 desc "Build MovableType Server"
 task :install do
-        sys_ntp.setup_JST
+	sys_ntp.setup_JST
+	#awstool.setup_s3cmd
+	#awstool.setup_backupconf 
+	#awstool.setup_backup_file_and_db_script
+	#awstool.setup_shutdowntime_run_backupscript
+	#awstool.do_tar_schedule_enable
+	#awstool.setup_s3fs
+        web_apache.install_apache
+	db_mysql.install_mysql_5_5
+	db_mysql.operationalTask.do_start
+	db_mysql.operationalTask.create_db
+	yum.setup_rpmforge
+	movabletype.install_packages
+	movabletype.setup_movabletype
+	web_apache.operationalTask.do_start
+	movabletype.setup_syntaxhighlighter
+	movabletype.puts_messages
+end
+
+# バックアップからのリストア
+desc "Build MovableType Server"
+task :restore do
+	sys_ntp.setup_JST
+	awstool.setup_s3cmd
+	awstool.setup_backupconf 
+	awstool.setup_backup_file_and_db_script
+	awstool.setup_shutdowntime_run_backupscript
+	awstool.do_tar_schedule_enable
+	awstool.setup_s3fs
         web_apache.install_apache
 	awstool.setup_s3cmd
 	db_mysql.install_mysql_5_5
 	db_mysql.operationalTask.do_start
-	movabletype.install_movabletype
-        web_apache.operationalTask.do_start
+	db_mysql.operationalTask.create_db
+	yum.setup_rpmforge
+	movabletype.install_packages
+	movabletype.do_dump_and_file_import
+	movabletype.s3fs_mount
+	web_apache.operationalTask.do_start
+	movabletype.puts_messages_after_restore
 end
 
 end # End of namespace :serverTemplate
@@ -55,80 +104,163 @@ namespace :movabletype do
 
 namespace :operationalTask do
 
-desc "backup Mvable Type db"
-task :backupdb do
-        # コマンドを実行してる Host 上での date コマンドの出力結果
-        # リモート Host 上での実行結果ではない
-        FILENAME = `date +%Y%m%d%H%M`
-
-        run <<-CMD
-                sudo mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --database #{_MOVABLETYPE_DB_NAME} > /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db &&
-                sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db s3://#{_S3_BUCKETS_NAME} &&
-                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.db
-        CMD
+desc "Backup Data & DB"
+task :do_dump_export do
+        db_mysql.operationalTask.do_dump_export
 end
 
 end # End of :operationalTask
 
-desc "install movabletype"
-task :install_movabletype do
-	# Attribute の設定
-	#MTOS_SOURCE = 'MTOS-5.14-ja.zip'
-	MTOS_SOURCE = 'MTOS-5.2.zip'
-	MTOS_DIRECTORY = MTOS_SOURCE.sub(".zip","")
 
+### Boot Task ###
+
+desc "Install Require Packages "
+task :install_packages do
         # 必要なパッケージのインストール
         packages = %w[
 		gcc make
 		perl-DBI perl-DBD-MySQL perl-Archive-Zip perl-Crypt-SSLeay perl-Cache-Memcached
 		perl-GD perl-XML-Parser perl-Mail-Sendmail perl-Archive-Tar perl-CPAN perl-YAML perl-Image-Size
+		perl-File-Which perl-Test-Base perl-IO-String
+		perl-Imager perl-Data-Buffer 
         ]
         run "sudo yum -y install #{packages.join(' ')}"
 
-	run 'sudo yes | sudo cpan Crypt::DSA'
-	run 'sudo yes | sudo cpan IPC::Run'
-	run 'sudo yes | sudo cpan Cache::File'
-	run 'sudo yes | sudo cpan Imager'
-	
-	# Database mt の作成
-        run <<-CMD
-		sudo mysqladmin -u root create #{_MOVABLETYPE_DB_NAME}
-	CMD
+        # CPAN 経由にてインストール
+        packages = %w[
+	Crypt::DSA IPC::Run Cache::File Imager	
+        ]
+        run "yes | sudo cpan #{packages.join(' ')}"
+end
+
+
+desc "Setup MovableType"
+task :setup_movabletype do
+	# Attribute の設定
+	MTOS_SOURCE = 'MTOS-5.2.2.zip'
+	MTOS_DIRECTORY = MTOS_SOURCE.sub(".zip","")
 
 	# movableype の Download と展開
 	run <<-CMD
 		sudo wget -P /root http://www.movabletype.org/downloads/stable/#{MTOS_SOURCE} &&
-		sudo unzip /root/#{MTOS_SOURCE} -d /root &&
-		sudo chmod 777 /var/www/html
+		sudo unzip /root/#{MTOS_SOURCE} -d /root
 	CMD
 
 	# /var/www/html/mt-static の準備
 	run <<-CMD
-		sudo cp -R /root/#{MTOS_DIRECTORY}/mt-static /var/www/html/mt-static &&
-		sudo chmod 777 /var/www/html/mt-static/support
+		sudo cp -R /root/#{MTOS_DIRECTORY}/mt-static /var/www/html/mt-static
 	CMD
 
 	# /var/www/cgi-bin の準備
 	run <<-CMD
 		sudo cp -R /root/#{MTOS_DIRECTORY} /var/www/cgi-bin &&
-		sudo rm -rf /var/www/cgi-bin/mt/mt-static &&
 		sudo mv /var/www/cgi-bin/#{MTOS_DIRECTORY} /var/www/cgi-bin/mt &&
-		sudo chmod 777 /var/www/cgi-bin/mt/ &&
-		sudo chmod 777 /var/www/cgi-bin/mt/mt-static/support &&
-		sudo mkdir /var/www/cgi-bin/mt/mt-static/support/uploads &&
-		sudo chmod 777 /var/www/cgi-bin/mt/mt-static/support/uploads
+		sudo rm -rf /var/www/cgi-bin/mt/mt-static
+	CMD
+	
+	# Directory のパーミッションの設定
+	run <<-CMD
+		sudo chmod 777 /var/www/html &&
+		sudo chmod 777 /var/www/html/mt-static/support &&
+		sudo chmod 777 /var/www/cgi-bin/mt
+	CMD
+end
+
+
+# MT をリストアした際、cgi-bin のみ展開する
+desc "Setup cgi-bin MovableType"
+task :setup_cgi_bin do
+	# Attribute の設定
+	MTOS_SOURCE = 'MTOS-5.2.2.zip'
+	MTOS_DIRECTORY = MTOS_SOURCE.sub(".zip","")
+
+	# movableype の Download と展開
+	run <<-CMD
+		sudo wget -P /root http://www.movabletype.org/downloads/stable/#{MTOS_SOURCE} &&
+		sudo unzip /root/#{MTOS_SOURCE} -d /root
 	CMD
 
-	puts "# インストール後, http://<Instance Public DNS>/cgi-bin/mt/mt-wizard.cgi にアクセスして Setup を実行"
+	# /var/www/cgi-bin の準備
+	run <<-CMD
+		sudo cp -R /root/#{MTOS_DIRECTORY} /var/www/cgi-bin &&
+		sudo mv /var/www/cgi-bin/#{MTOS_DIRECTORY} /var/www/cgi-bin/mt &&
+		sudo rm -rf /var/www/cgi-bin/mt/mt-static &&
+		sudo chmod 777 /var/www/cgi-bin/mt
+	CMD
+end
+
+desc "Setup s3fs Mount Point"
+task :s3fs_mount do
+	#FIX-ME: s3fs がリモートからうまく Mount できない。ローカルで同じコマンドを実行したらうまく Mount できる
+	#run <<-CMD
+	#sudo mkdir -p #{_S3FS_DIRECTORY} &&
+	#sudo chown apache:apache #{_S3FS_DIRECTORY} &&
+	#CMD
+	#run "sudo /usr/local/bin/s3fs -d #{_PUBLIC_S3} #{_S3FS_DIRECTORY} -o default_acl=public-read"
+
+        put unindent(<<-'CONF'), '/tmp/s3fs_mount.sh'
+		#!/bin/sh
+		s3fs www.yggdrasillnetwork.net /var/www/html -o default_acl=public-read -o allow_other 
+        CONF
+	run 'sudo chmod +x /tmp/s3fs_mount.sh'
+        run 'sudo mv /tmp/s3fs_mount.sh /root'
+end
+
+
+desc "Setup SyntaxHighlighter"
+task :setup_syntaxhighlighter do
+	# SyntaxHighlighter for Movable Type の Download と展開
+	run <<-CMD
+		sudo wget -P /tmp http://projects.makotokw.com/trac/arcadia/export/1187/etch/proj.movabletype.syntaxhighlighter/trunk/bin/0.1.1/mt-SyntaxHighlighter_0.1.1.0910040.zip &&
+		sudo mkdir /tmp/mt-SyntaxHighlighter &&
+		sudo unzip /tmp/mt-SyntaxHighlighter_0.1.1.0910040.zip -d /tmp/mt-SyntaxHighlighter
+	CMD
+
+	# plugin の展開
+	run <<-CMD
+		sudo cp -R /tmp/mt-SyntaxHighlighter/mt-static/plugins/SyntaxHighlighter /var/www/html/mt-static/plugins &&
+		sudo cp -R /tmp/mt-SyntaxHighlighter/plugins/SyntaxHighlighter /var/www/cgi-bin/mt/plugins
+	CMD
+end
+
+
+task :puts_messages do
+	# インスタンスに割り当てられている Public の Hostname を取得
+	PUBLIC_DNS = capture("curl http://169.254.169.254/latest/meta-data/public-hostname")
+
+	# メッセージの出力
 	puts	
-	puts "# スタティックウェブパスには http://<Instance Public DNS>/mt-static を入力"
-	puts "# スタティックファイルパスは /var/www/cgi-bin/mt/mt-static と Default を入力"
+	puts "インストール後, http://#{PUBLIC_DNS}/cgi-bin/mt/mt-wizard.cgi にアクセスして Setup を実行"
 	puts	
-	puts "# データベース設定"
-	puts "#   データベースサーバ: localhost"
-	puts "#   データベース名: mt"
-	puts "#   ユーザ名: root"
-	puts "#   パスワード: なし"
+	puts "スタティックウェブパスには http://#{PUBLIC_DNS}/mt-static を入力"
+	puts "スタティックファイルパスは /var/www/html/mt-static と Default を入力"
+	puts	
+	puts "データベース設定"
+	puts "  データベースサーバ: localhost"
+	puts "  データベース名: #{_DB_NAME}"
+	puts "  ユーザ名: root"
+	puts "  パスワード: なし"
+	puts	
+end
+
+task :puts_messages_after_restore do
+	# インスタンスに割り当てられている Public の Hostname を取得
+	PUBLIC_DNS = capture("curl http://169.254.169.254/latest/meta-data/public-hostname")
+
+	# メッセージの出力
+	puts	
+	puts "http://#{PUBLIC_DNS}/cgi-bin/mt/mt.cgi にアクセスしてログイン"
+	puts	
+end
+
+
+desc "Restore Data from Backuped file in S3 Buckets"
+task :do_dump_and_file_import do
+        # DB のリストア
+        db_mysql.operationalTask.do_dump_import
+
+	# File のリストア
+	awstool.do_tar_import
 end
 
 end # End of namespace :movabletype
