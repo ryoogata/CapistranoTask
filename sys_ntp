@@ -8,7 +8,48 @@ load 'config.rb'
 
 namespace :sys_ntp do
 
-# Default ( Server のローカルタイムを JST に設定 )
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Start ntp Server"
+task :do_start do
+        run 'sudo /etc/init.d/ntpd start'
+end
+
+desc "Stop ntp Server"
+task :do_stop do
+        run 'sudo /etc/init.d/ntpd stop'
+end
+
+desc "Restart ntp Server"
+task :do_restart do
+        run 'sudo /etc/init.d/ntpd restart'
+end
+
+desc "Set chkconfig on"
+task :chkconfig_on do
+        run 'sudo chkconfig ntpd on'
+end
+
+desc "Set chkconfig off"
+task :chkconfig_off do
+        run 'sudo chkconfig ntpd off'
+end
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+# ntpd のインストール
+desc "Install ntpd"
+task :install_ntpd do
+	run 'sudo yum -y install ntp'
+end
+
+
+# ローカルタイムを JST に設定
 desc "SYS Timezone set ( JST )"
 task :setup_JST do
         run 'yes | sudo cp -f /usr/share/zoneinfo/Japan /etc/localtime'
