@@ -1,0 +1,43 @@
+#############################################################################
+## Settins:
+load 'config.rb'
+
+
+#############################################################################
+## TASKS.
+
+namespace :sys_firewall do
+
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Start iptables"
+task :do_start do
+        run 'sudo /etc/init.d/iptables start'
+end
+
+desc "Stop iptables"
+task :do_stop do
+	run 'sudo /etc/init.d/iptables stop'
+end
+
+desc "Restart iptables"
+task :do_restart do
+	run 'sudo /etc/init.d/iptables restart'
+end
+
+desc "Set chkconfig on"
+task :chkconfig_on do
+	run 'sudo chkconfig iptables on'
+end
+
+desc "Set chkconfig off"
+task :chkconfig_off do
+	run 'sudo chkconfig iptables off'
+end
+
+end # End of namespace :operationalTask do
+
+end # End of namespace :sys_firewall
