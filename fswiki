@@ -1,6 +1,6 @@
 ##########################################################################
-## Support.	Amazon Linux AMI 2012.09
-## 		AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+##
 
 
 #############################################################################
@@ -26,6 +26,7 @@ set :_S3_BUCKETS_NAME, 'ogata_buckets'
 # バックアップするファイル名の Prefix
 # バックアップファイルは Prefix + date の形式で保存される
 # ( e.g fswiki201210262316.tgz )
+#set :_BACKUPED_FILE_PREFIX, 'fswikibook'
 set :_BACKUPED_FILE_PREFIX, 'fswiki'
 
 # 下記 Attribute は config.rb に記載している
@@ -40,14 +41,15 @@ namespace :serverTemplate do
 desc "Build FSWiki Server"
 task :install do
 	sys_ntp.setup_JST
-	web_apache.install_apache
 	awstool.setup_s3cmd
 	awstool.setup_backupconf
+	awstool.setup_backup_file_script
+	awstool.setup_shutdowntime_run_backupscript
 	awstool.do_tar_schedule_enable
-	awstool.setup_backup_script
-	awstool.setup_backupS3
+	web_apache.install_apache
 	fswiki.install_fswiki
 	web_apache.operationalTask.do_start
+	fswiki.puts_messages
 end
 
 
@@ -55,15 +57,16 @@ end
 desc "Restore from S3 Backup FSWiki Server"
 task :restore do
 	sys_ntp.setup_JST
-	web_apache.install_apache
 	awstool.setup_s3cmd
 	awstool.setup_backupconf
+	awstool.setup_backup_file_script
+	awstool.setup_shutdowntime_run_backupscript
 	awstool.do_tar_schedule_enable
-	awstool.setup_backup_script
-	awstool.setup_backupS3
+	web_apache.install_apache
 	fswiki.install_fswiki
 	fswiki.do_tar_restore
 	web_apache.operationalTask.do_start
+	fswiki.puts_messages
 end
 
 end # End of namespace :serverTemplate
@@ -177,6 +180,26 @@ task :do_tar_restore do
 		sudo chown -R apache #{_MAIN_DIRECTORY} &&
 		sudo chown -R apache #{_BACKUP_DIRECTORY}
 	CMD
+
+	#プラグイン: category_stamp の設定
+        if remote_file_exists?("/opt/wiki/plugin/category")
+                run <<-CMD
+			sudo ln -s #{_BACKUP_DIRECTORY}/plugin/category/CategoryStampHandler.pm #{_MAIN_DIRECTORY}/plugin/category &&
+			sudo ln -s #{_BACKUP_DIRECTORY}/plugin/category/CategoryStamp.pm #{_MAIN_DIRECTORY}/plugin/category &&
+			sudo sed -i '/}/i \$wiki-\>add_paragraph_plugin(\"category_stamp\",\"plugin::category::CategoryStamp\",\"HTML\");' #{_MAIN_DIRECTORY}/plugin/category/Install.pm &&
+			sudo sed -i '/}/i \$wiki-\>add_handler(\"CATEGORY_ADD\",\"plugin::category::CategoryStampHandler\");' #{_MAIN_DIRECTORY}/plugin/category/Install.pm
+                CMD
+        end
+end
+
+task :puts_messages do
+	# インスタンスに割り当てられている Public の Hostname を取得
+	PUBLIC_DNS = capture("curl http://169.254.169.254/latest/meta-data/public-hostname")
+
+	# メッセージの出力
+	puts "構築完了しました。"
+	puts "http://#{PUBLIC_DNS}/cgi-bin/wiki/wiki.cgi にアクセスして下さい"
+	puts
 end
 
 end	# End of namespace :fswiki
