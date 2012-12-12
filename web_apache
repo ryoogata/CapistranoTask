@@ -34,14 +34,15 @@ end # End of namespace :operationalTask do
 ### Boot Task ###
 
 # apache のインストール
-desc "install apache"
+desc "Install apache"
 task :install_apache do
 	run 'sudo yum -y install httpd httpd-devel gcc make'
+	run 'sudo chkconfig httpd on'
 end
 
 
 # DDoS 防御の mod_evasiv のインストール
-desc "install mod_evasive"
+desc "Install mod_evasive"
 task :install_mod_evasive do
 	run 'wget -P /tmp http://www.zdziarski.com/blog/wp-content/uploads/2010/02/mod_evasive_1.10.1.tar.gz'
 	run 'cd /tmp ; tar xzpvf mod_evasive_1.10.1.tar.gz'
@@ -60,12 +61,18 @@ task :install_mod_evasive do
 end
 
 # WAF の mod_security のインストール
-desc "install mod_security"
+desc "Install mod_security"
 task :install_mod_security do
+	# Attribute の設定
+	MODSECURITY_VERSION = '2.7.1'
+
+	# mod_security インストールに必要なパッケージのインストール
 	run 'sudo yum -y install pcre-devel libxml2-devel libcurl-devel git'
-	run 'wget -P /tmp https://github.com/downloads/SpiderLabs/ModSecurity/modsecurity-apache_2.7.0.tar.gz'
-	run 'cd /tmp ; tar xzpvf modsecurity-apache_2.7.0.tar.gz'
-	run 'cd /tmp/modsecurity-apache_2.7.0 ; ./configure ; make ; sudo make install'
+
+	# mod_security のインストール
+	run "wget -P /tmp https://github.com/downloads/SpiderLabs/ModSecurity/modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
+	run "cd /tmp ; tar xzpvf modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
+	run "cd /tmp/modsecurity-apache_#{MODSECURITY_VERSION} ; ./configure ; make ; sudo make install"
 	run 'sudo mkdir -p /etc/httpd/modsecurity.d/activated_rules'
 	run 'cd /tmp ; git clone git://github.com/SpiderLabs/owasp-modsecurity-crs.git'
 end
