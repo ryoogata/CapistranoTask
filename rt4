@@ -1,40 +1,79 @@
-#############################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-end
+##########################################################################
+## Support. 	AMI: RightImage_CentOS_6.3_x64_v5.8.8 (ami-01496d44)    
+
 
 #############################################################################
-## Settins:
+## Settins.
 load 'config.rb'
+load 'awstool'
+load 'sys_ntp'
+load 'web_apache'
+load 'db_mysql'
+load 'yum'
+
 
 #############################################################################
 ## Attribute.
 
-# fswiki の本体がインストールされる Directory
+# バックアップファイルを保存する S3 buckets
+set :_S3_BUCKETS_NAME, 'ogata_buckets'
+
+# バックアップする DB の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g rt4_database201210262316.tgz )
+set :_BACKUPED_DB_PREFIX, 'rt4_database'
+
+# バックアップを取得する Directory ( awstool:setup_backupconf )
+set :_BACKUP_DIRECTORY, '/opt/rt4/local'
+
+# バックアップするファイル名の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g rt4_local201210262316.tgz )
+set :_BACKUPED_FILE_PREFIX, 'rt4_local'
+
+# Request Tracker の Source の選択
 # ( 4.0.0 - 4.0.8 がインストール可能 )
 set :_RT_SOURCE, 'rt-4.0.8.tar.gz'
+
+# RT4 用 DB 名
+set :_DB_NAME, 'rt4'
+
+#############################################################################
+namespace :serverTemplate do
+
+# RT4 のクリーンインストール
+desc "Build RT4 Server"
+task :install do
+	sys_ntp.setup_JST
+	yum.setup_epel
+	yum.setup_rpmforge
+        awstool.setup_s3cmd
+        awstool.setup_backupconf
+        awstool.setup_backup_file_and_db_script
+        awstool.setup_shutdowntime_run_backupscript
+        awstool.do_tar_schedule_enable
+	db_mysql.install_mysql_5_5
+	db_mysql.operationalTask.do_start
+	web_apache.install_apache
+	rt4.install_packages
+	rt4.setup_rt4
+	rt4.setup_httpconf
+	web_apache.operationalTask.do_restart
+	rt4.puts_messages
+end
+
+end # End of namespace :serverTemplate
 
 
 #############################################################################
 ## TASKS.
 
-task :provision do
-	install_preRTpackage	
-	install_mysql
-	install_apache
-	install_RTpackage
-	rt4_install
-	rt_http
-end
+namespace :rt4 do
 
+### Boot Task ###
 
-desc "Install PreRequire RT 4 Package install"
-task :install_preRTpackage do
-	# EPEL と RPM Forge のレポジトリのインストール
-	run 'rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm'
-	run 'rpm -Uv http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm'
-
+desc "Install RT 4 PreRequire Package install"
+task :install_packages do
 	# 事前に必要なパッケージをインストール
 	packages = %w[
 		perl perl-CPAN
@@ -42,82 +81,41 @@ task :install_preRTpackage do
 		gd gd-devel libpng libpng-devel libjpeg libjpeg-devel freetype freetype-devel
 	]
 	run "sudo yum -y install #{packages.join(' ')}"
+
+	# その他パッケージのインストール
+	packages = %w[
+		perl-CSS-* perl-MIME-Types perl-Text* perl-XML-RSS perl-MIME-tools perl-GD
+		perl-GDGraph perl-CGI* perl-TermReadKey perl-Time-modules perl-Class-ReturnValue
+		perl-Text-Quoted perl-Module-Versions-Report perl-Apache-Session-Wrapper 
+		perl-Cache-Simple-TimedExpiry perl-Calendar-Simple perl-HTML-Scrubber
+		perl-HTML-Tree perl-HTML-Format perl-Regexp* perl-Net-Server
+		perl-PerlIO-eol perl-Locale-Maketext-Fuzzy perl-Locale-Maketext-Lexicon
+		perl-HTTP-Server-Simple perl-HTTP-Server-Simple-Mason perl-File-ShareDir
+		perl-Email-Address perl-DBIx-SearchBuilder perl-Moose perl-Data-ICal
+		perl-Log-Dispatch perl-Tree-Simple fcgi-perl perl-IPC-Run3
+		perl-GnuPG-Interface perl-FCGI* perl-JSON* perl-Net-CIDR mod_fastcgi
+		perl-JavaScript-Minifier perl-DBD-MySQL
+	]
+	run "sudo yum -y install #{packages.join(' ')}"
+
+	# rpmforge-extras からインストール
+	packages = %w[
+		perl-Class-Accessor perl-Plack
+	]
+	run "sudo yum -y --enablerepo=rpmforge-extras install #{packages.join(' ')}"
+
+	# CPAN 経由にてインストール
+	packages = %w[
+		CGI::PSGI Encode HTML::RewriteAttributes URI HTML::Mason
+		HTML::Mason::PSGIHandler Plack::Handler::Starlet 
+		Convert::Color Regexp::IPv6 HTML::Quoted DBIx::SearchBuilder
+		FCGI
+	]
+	run "yes | cpan #{packages.join(' ')}"
 end
 
 
-desc "Install MySQL Server"
-task :install_mysql do
-  run 'yum -y install mysql-server'
-  run 'chkconfig mysqld on'
-  run 'service mysqld start'
-end
-
-
-desc "Install Apache"
-task :install_apache do
-  run 'yum -y install httpd httpd-devel'
-end
-
-
-desc "Install RT 4 Package install"
-task :install_RTpackage do
-  run 'yum -y install perl-CSS-*' 
-  run 'yum -y install perl-MIME-Types'
-  run 'yum -y install perl-Text*'
-  run 'yum -y install perl-XML-RSS'
-  run 'yum -y install perl-MIME-tools'
-  run 'yum -y install perl-GD'
-  run 'yum -y install perl-GDGraph'
-  run 'yum -y install perl-CGI*'
-  run 'yum -y install perl-TermReadKey'
-  run 'yum -y install perl-Time-modules'
-  run 'yum -y install perl-Class-ReturnValue'
-  run 'yum -y install perl-Text-Quoted'
-  run 'yum -y install perl-Module-Versions-Report'
-  run 'yum -y install perl-Apache-Session-Wrapper'
-  run 'yum -y install perl-Cache-Simple-TimedExpiry'
-  run 'yum -y install perl-Calendar-Simple'
-  run 'yum -y install perl-HTML-Scrubber'
-  run 'yum -y install perl-HTML-Tree'
-  run 'yum -y install perl-HTML-Format'
-  run 'yum -y --enablerepo=rpmforge-extras install perl-Class-Accessor'
-  run 'yum -y --enablerepo=rpmforge-extras install perl-Plack'
-  run 'yum -y install perl-Regexp*'
-  run 'yum -y install perl-Net-Server'
-  run 'yum -y install perl-PerlIO-eol'
-  run 'yum -y install perl-Locale-Maketext-Fuzzy perl-Locale-Maketext-Lexicon'
-  run 'yum -y install perl-HTTP-Server-Simple'
-  run 'yum -y install perl-HTTP-Server-Simple-Mason'
-  run 'yum -y install perl-File-ShareDir'
-  run 'yum -y install perl-Email-Address'
-  run 'yum -y install perl-DBIx-SearchBuilder'
-  run 'yum -y install perl-Moose'
-  run 'yum -y install perl-Data-ICal'
-  run 'yum -y install perl-Log-Dispatch'
-  run 'yum -y install perl-Tree-Simple'
-  run 'yum -y install fcgi-perl'
-  run 'yum -y install perl-IPC-Run3'
-  run 'yum -y install perl-GnuPG-Interface'
-  run 'yum -y install perl-FCGI*'
-  run 'yum -y install perl-JSON*'
-  run 'yum -y install perl-Net-CIDR'
-  run 'yum -y install mod_fastcgi'
-  run 'yum -y install perl-JavaScript-Minifier'
-  run 'yes | cpan CGI::PSGI'
-  run 'yes | cpan Encode'
-  run 'yes | cpan HTML::RewriteAttributes'
-  run 'yes | cpan URI'
-  run 'yes | cpan HTML::Mason'
-  run 'yes | cpan HTML::Mason::PSGIHandler'
-  run 'yes | cpan Plack::Handler::Starlet'
-  run 'yes | cpan Convert::Color'
-  run 'yes | cpan Regexp::IPv6'
-  run 'yes | cpan HTML::Quoted'
-  run 'yes | cpan DBIx::SearchBuilder'
-end
-
-
-task :rt4_install do
+task :setup_rt4 do
         RT_DIR = _RT_SOURCE.slice(0..7)
 
 	run <<-CMD
@@ -135,7 +133,7 @@ task :rt4_install do
 end
 
 
-task :rt_http do
+task :setup_httpconf do
 	put unindent(<<-'CONF'), '/etc/httpd/conf.d/rt.conf'
 		<VirtualHost *:80>
 		### Optional apache logs for RT
@@ -158,5 +156,21 @@ task :rt_http do
 		</Location>
 		</VirtualHost>
 	CONF
-	run '/etc/init.d/httpd restart'
 end
+
+task :puts_messages do
+# インスタンスに割り当てられている Public の Hostname を取得
+        PUBLIC_DNS = capture("curl http://169.254.169.254/latest/meta-data/public-hostname")
+
+        # メッセージの出力
+        puts
+        puts "http://#{PUBLIC_DNS}"
+        puts "にアクセスしてログイン"
+        puts
+	puts "名前: root"
+	puts "パスワード: password"
+	puts "でログイン"
+        puts
+end
+
+end # End of namespace :rt4 do
