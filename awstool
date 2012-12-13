@@ -46,9 +46,8 @@ end
 # cron で Backup を実行するための設定
 desc "Setup cron Backup"
 task :do_tar_schedule_enable  do
-        CRONTAB = '12 23 * * * root /root/backup2s3.sh'
         run <<-CMD
-                sudo sh -c "echo #{CRONTAB} >> /etc/crontab"
+                sudo sh -c 'echo 12 23 "*" "*" "*" root /root/backup2s3.sh >> /etc/crontab'
         CMD
 end
 
