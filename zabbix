@@ -61,6 +61,7 @@ task :install do
 	db_mysql.operationalTask.do_start
 	zabbix.install_zabbix
 	web_apache.operationalTask.do_start
+	zabbix.puts_messages
 end
 
 
@@ -79,6 +80,7 @@ task :restore do
 	zabbix.install_zabbix
 	zabbix.do_tar_and_dump_import
 	web_apache.operationalTask.do_start
+	zabbix.puts_messages
 end
 
 end # End of namespace :serverTemplate
