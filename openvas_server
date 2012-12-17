@@ -1,22 +1,18 @@
 ##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
-
-# ファイルが存在しているか否かの確認
-# ( 存在しているファイルの参照権限がないと動作しない )
-def remote_file_exists?(full_path)
-  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
-end
+## Support.	AMI: RightImage_CentOS_6.3_x64_v5.8.8 (ami-01496d44)
 
 
 #############################################################################
-## Settins:
+## Settins.
 load 'config.rb'
+load 'awstool'
+load 'sys_ntp'
 
 #############################################################################
 ## Attribute.
+
+# バックアップを取得する Directory ( awstool:setup_backupconf )
+set :_BACKUP_DIRECTORY, '/var/cache/openvas /var/lib/openvas/users'
 
 # バックアップファイルを保存する s3 buckets
 set :_S3_BUCKETS_NAME, 'ogata_buckets'
@@ -26,12 +22,70 @@ set :_S3_BUCKETS_NAME, 'ogata_buckets'
 # ( e.g openvasServer201210262316.tgz )
 set :_BACKUPED_FILE_PREFIX, 'openvasServer'
 
+
+#############################################################################
+namespace :serverTemplate do
+
+# OpenVAS Server のクリーンインストール
+desc "Build OpenVAS Server"
+task :install do
+	sys_ntp.setup_JST
+	awstool.setup_s3cmd
+	awstool.setup_backupconf
+	awstool.setup_backup_file_script
+	awstool.setup_shutdowntime_run_backupscript
+	awstool.do_tar_schedule_enable
+	openvas_server.install_openvas_server
+	openvas_server.operationalTask.run_openvas_nvt_sync
+	openvas_server.operationalTask.do_start_openvas_scanner
+end
+
+# バックアップからのリストア
+desc "Restore from S3 Backup OpenVAS Server"
+task :restore do
+	sys_ntp.setup_JST
+	awstool.setup_s3cmd
+	awstool.setup_backupconf
+	awstool.setup_backup_file_script
+	awstool.setup_shutdowntime_run_backupscript
+	awstool.do_tar_schedule_enable
+	openvas_server.install_openvas_server
+	openvas_server.do_tar_restore
+	openvas_server.operationalTask.run_openvas_nvt_sync
+	openvas_server.operationalTask.do_start_openvas_scanner
+end
+
+end # End of namespace :serverTemplate
+
+
 #############################################################################
 ## TASKS.
 
 namespace :openvas_server do
 
-task :install do
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Run openvas-nvt-sync command"
+task :run_openvas_nvt_sync do
+	run '/usr/sbin/openvas-nvt-sync'
+end
+
+desc "Start OpenVAS Scanner"
+task :do_start_openvas_scanner do
+	run '/etc/init.d/openvas-scanner start'
+end
+
+desc "Stop OpenVAS Scanner"
+task :do_stop_openvas_scanner do
+	run '/etc/init.d/openvas-scanner stop'
+end
+
+end # End of namespace :operationalTask do
+
+
+task :install_openvas_server do
 	# 事前準備
 	run 'wget -P /tmp http://www.atomicorp.com/installers/atomic'
 	run 'chmod +x /tmp/atomic'
@@ -50,33 +104,10 @@ task :install do
 end
 
 
-desc "Backup upload in S3 Buckets"
-task :backup do
-        # コマンドを実行してる Host 上での date コマンドの出力結果
-        # リモート Host 上での実行結果ではない
-        FILENAME = `date +%Y%m%d%H%M`
-
-	# Directory: /var/cache/openvas, Directory: /var/lib/openvas/users Directory を Backup
-        run <<-CMD
-                cd / ; sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz /var/cache/openvas /var/lib/openvas/users &&
-                sudo s3cmd put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
-                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
-        CMD
-end
-
-
 desc "Restore Data from Backuped file in S3 Buckets"
-task :restore do
-        # S3 に保存しているデータを Download して展開
-	# Directory: /var/cache/openvas, Directory: /var/lib/openvas/users Directory を Restore
-        run <<-CMD
-                # S3 に保存しているデータの Download
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-                | xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz /tmp &&
-		# リストア作業
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-		| xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C /
-	CMD
+task :do_tar_restore do
+	# S3 に保存しているデータを Download して展開
+	awstool.do_tar_import
 end
 
 end # End of namespace :openvas_server
