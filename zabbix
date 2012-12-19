@@ -51,11 +51,11 @@ namespace :serverTemplate do
 desc "Build Zabbix Server"
 task :install do
         sys_ntp.setup_JST
-        awstool.setup_s3cmd
-        awstool.setup_backupconf
-        awstool.setup_backup_file_and_db_script
-        awstool.setup_shutdowntime_run_backupscript
-        awstool.do_tar_schedule_enable
+        #awstool.setup_s3cmd
+        #awstool.setup_backupconf
+        #awstool.setup_backup_file_and_db_script
+        #awstool.setup_shutdowntime_run_backupscript
+        #awstool.do_tar_schedule_enable
 	web_apache.install_apache
 	db_mysql.install_mysql_5_5
 	db_mysql.operationalTask.do_start
@@ -146,6 +146,7 @@ task :install_zabbix do
 		pid-file=/var/run/mysqld/mysqld.pid
         MYCNF
 	run 'yes | sudo cp -f /tmp/my.cnf /etc/my.cnf'
+	run 'sudo rm -rf /tmp/my.conf'
 
 	# MySQL の再起動
 	db_mysql.operationalTask.do_start
@@ -165,6 +166,7 @@ task :install_zabbix do
 		max_input_time = 300
 	PHPINI
 	run 'sudo sh -c "cat /tmp/php.ini >> /etc/php.ini"'
+	run 'sudo rm -rf /tmp/php.ini'
 
 	# Zabbix 用の DB の Setup
 	run <<-CMD
@@ -200,10 +202,84 @@ task :install_zabbix do
 	run 'sudo cp /usr/share/fonts/ipa-gothic/ipag.ttf /var/www/html/zabbix/fonts/'
 	# /var/www/html/zabbix/include/defines.inc.php の DejaVuSans を ipag に置換
 	run 'sudo sed -i "s/\'DejaVuSans\'); \/\//\'ipag\'); \/\//" /var/www/html/zabbix/include/defines.inc.php'
+
+end
+
+task :config_zabbix_server do
+	# /usr/local/etc/zabbix_server.conf.d を利用するための設定変更
+	run 'sudo sed -i "s/# Include=\/usr\/local\/etc\/zabbix_server.conf.d\//Include=\/usr\/local\/etc\/zabbix_server.conf.d\//" /usr/local/etc/zabbix_server.conf'
+
+	# zabbix_server pid ファイル収容用 Direcotry 作成
+	run 'sudo mkdir -p /var/run/zabbix/'
+	run 'sudo chown zabbix:zabbix /var/run/zabbix/'
+
+	# PidFile 設定ファイル作成
+	put unindent(<<-'PIDFILE'), '/tmp/pid.conf'
+		### Option: PidFile
+		#       Name of PID file.
+		#
+		# Mandatory: no
+		# Default:
+		PidFile=/var/run/zabbix/zabbix_server.pid
+	PIDFILE
+	run 'sudo mv /tmp/pid.conf /usr/local/etc/zabbix_server.conf.d'
+
+
+	# zabbix_server log ファイル収容用 Directory 作成
+	run 'sudo mkdir -p /var/log/zabbix/'
+	run 'sudo chown zabbix:zabbix /var/log/zabbix/'
+	
+	# log 設定ファイル作成
+	put unindent(<<-'LOGCONF'), '/tmp/log.conf'
+		### Option: LogFile
+		#       Name of log file.
+		#       If not set, syslog is used.
+		#
+		# Mandatory: no
+		# Default:
+		# LogFile=
+		LogFile=/var/log/zabbix/zabbix_server.log
+	LOGCONF
+	run 'sudo mv /tmp/log.conf /usr/local/etc/zabbix_server.conf.d'
+end
+
+
+task :config_zabbix_agent do
+	# /usr/local/etc/zabbix_agentd.conf.d を利用するための設定変更
+	run 'sudo sed -i "s/# Include=\/usr\/local\/etc\/zabbix_agentd.conf.d\//Include=\/usr\/local\/etc\/zabbix_agentd.conf.d\//" /usr/local/etc/zabbix_agentd.conf'
+
+	# PidFile 設定ファイル作成
+	put unindent(<<-'PIDFILE'), '/tmp/pid.conf'
+		### Option: PidFile
+		#       Name of PID file.
+		#
+		# Mandatory: no
+		# Default:
+		PidFile=/var/run/zabbix/zabbix_agentd.pid
+	PIDFILE
+	run 'sudo mv /tmp/pid.conf /usr/local/etc/zabbix_agentd.conf.d'
+
+
+	# zabbix_agent log ファイル収容用 Directory 作成
+	run 'sudo mkdir -p /var/log/zabbix/'
+	run 'sudo chown zabbix:zabbix /var/log/zabbix/'
+	
+	# log 設定ファイル作成
+	put unindent(<<-'LOGCONF'), '/tmp/log.conf'
+		### Option: LogFile
+		#       Name of log file.
+		#       If not set, syslog is used.
+		#
+		# Mandatory: no
+		# Default:
+		# LogFile=
+		LogFile=/var/log/zabbix/zabbix_agentd.log
+	LOGCONF
+	run 'sudo mv /tmp/log.conf /usr/local/etc/zabbix_agentd.conf.d'
 end
 
 task :start_server do
-	run 'sudo service zabbix_server start'
+	run 'sudo /bin/bash -x /etc/init.d/zabbix_server start'
 end
 
 
