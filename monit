@@ -1,0 +1,59 @@
+#############################################################################
+## Settins:
+load 'config.rb'
+
+
+#############################################################################
+## TASKS.
+
+namespace :monit do
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Start monit Server"
+task :do_start do
+        run 'sudo /etc/init.d/monit start'
+end
+
+desc "Stop monit Server"
+task :do_stop do
+        run 'sudo /etc/init.d/monit stop'
+end
+
+desc "Restart monit Server"
+task :do_restart do
+        run 'sudo /etc/init.d/monit restart'
+end
+
+desc "Set chkconfig on"
+task :chkconfig_on do
+        run 'sudo chkconfig monit on'
+end
+
+desc "Set chkconfig off"
+task :chkconfig_off do
+        run 'sudo chkconfig monit off'
+end
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+# monit のインストール
+desc "Install monit"
+task :install_monit do
+	run 'sudo yum -y install monit'
+end
+
+# cron で monit を実行するための設定
+desc "Setup cron monit"
+task :setup_monit_crontab  do
+        run <<-CMD
+                sudo sh -c 'echo 0,5,10,15,20,25,30,35,40,45,50,55 "*" "*" "*" "*" root /usr/bin/monit validate >> /etc/crontab'
+        CMD
+end
+
+end # namespace :monit
