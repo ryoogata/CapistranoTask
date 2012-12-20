@@ -15,6 +15,9 @@ namespace :operationalTask do
 
 desc "Start MySQL Server"
 task :do_start do
+	if remote_file_exists?("/var/lib/mysql/ib_logfile0")
+		run 'sudo rm -rf /var/lib/mysql/ib_logfile*'
+	end
         run 'sudo /etc/init.d/mysqld start'
 end
 
@@ -27,7 +30,12 @@ end
 
 desc "Restart MySQL Server"
 task :do_restart do
-        run 'sudo /etc/init.d/mysqld restart'
+        run 'sudo /etc/init.d/mysqld stop'
+
+	if remote_file_exists?("/var/lib/mysql/ib_logfile0")
+		run 'sudo rm -rf /var/lib/mysql/ib_logfile*'
+	end
+        run 'sudo /etc/init.d/mysqld start'
 end
 
 
