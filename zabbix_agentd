@@ -1,0 +1,120 @@
+##########################################################################
+## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+##
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+load 'monit'
+
+#############################################################################
+## Attribute.
+
+# Zabbix のバージョン
+set :_ZABBIX_VERSION, '2.0.4'
+
+# Zabbix 監視 Server の IP Address
+set :_ZABBIX_SERVER, '10.171.111.197'
+
+
+#############################################################################
+## TASKS.
+
+namespace :zabbix_agentd do
+
+
+### Boot Task ###
+
+task :install_zabbix_agentd do
+	# 必要なパッケージのインストール
+	packages = %w[
+		gcc make
+	]
+	run "sudo yum -y install #{packages.join(' ')}"
+
+	# Zabbix の Source の Download とコンパイル
+	run "wget -P /tmp 'http://downloads.sourceforge.net/project/zabbix/ZABBIX%20Latest%20Stable/#{_ZABBIX_VERSION}/zabbix-#{_ZABBIX_VERSION}.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fzabbix%2F&ts=1351499277&use_mirror=jaist'"
+	run "tar xzpf /tmp/zabbix-#{_ZABBIX_VERSION}.tar.gz -C /tmp"
+	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; ./configure --disable-server --enable-agent"
+	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; make"
+	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; sudo make install"
+
+	# zabbix_agentd 用のユーザ ( zabbix ) を追加
+	run 'sudo adduser zabbix'
+
+	# zabbix_agentd の起動準備と起動
+	run "sudo cp /tmp/zabbix-#{_ZABBIX_VERSION}/misc/init.d/fedora/core5/zabbix_agentd /etc/init.d/"
+
+	# chkconfig の設定
+	run 'sudo chkconfig --add zabbix_agentd'
+
+	# Source の削除
+	run "sudo rm -rf /tmp/zabbix-#{_ZABBIX_VERSION}.tar.gz"
+	run "sudo rm -rf /tmp/zabbix-#{_ZABBIX_VERSION}"
+	
+	# /usr/local/etc/zabbix_agentd.conf.d を利用するための設定変更
+	run 'sudo sed -i "s/# Include=\/usr\/local\/etc\/zabbix_agentd.conf.d\//Include=\/usr\/local\/etc\/zabbix_agentd.conf.d\//" /usr/local/etc/zabbix_agentd.conf'
+
+        # zabbix_agentd pid ファイル収容用 Direcotry 作成
+        run 'sudo mkdir -p /var/run/zabbix/'
+        run 'sudo chown zabbix:zabbix /var/run/zabbix/'
+
+	# PidFile 設定ファイル作成
+	put unindent(<<-'PIDFILE'), '/tmp/pid.conf'
+		### Option: PidFile
+		#       Name of PID file.
+		#
+		# Mandatory: no
+		# Default:
+		PidFile=/var/run/zabbix/zabbix_agentd.pid
+	PIDFILE
+	run 'sudo mv /tmp/pid.conf /usr/local/etc/zabbix_agentd.conf.d'
+
+	# zabbix_agent log ファイル収容用 Directory 作成
+	run 'sudo mkdir -p /var/log/zabbix/'
+	run 'sudo chown zabbix:zabbix /var/log/zabbix/'
+	
+	# log 設定ファイル作成
+	put unindent(<<-'LOGCONF'), '/tmp/log.conf'
+		### Option: LogFile
+		#       Name of log file.
+		#       If not set, syslog is used.
+		#
+		# Mandatory: no
+		# Default:
+		# LogFile=
+		LogFile=/var/log/zabbix/zabbix_agentd.log
+	LOGCONF
+	run 'sudo mv /tmp/log.conf /usr/local/etc/zabbix_agentd.conf.d'
+
+	# Zabbix の監視サーバの指定
+	put unindent(<<-SERVERCONF), "/tmp/server.conf"
+		### Option: Server
+		#       List of comma delimited IP addresses (or hostnames) of Zabbix servers.
+		#       Incoming connections will be accepted only from the hosts listed here.
+		#       No spaces allowed.
+		#       If IPv6 support is enabled then '127.0.0.1', '::127.0.0.1', '::ffff:127.0.0.1' are treated equally.
+		#
+		# Mandatory: no
+		# Default:
+		# Server=
+		Server=#{_ZABBIX_SERVER}
+	SERVERCONF
+	run 'sudo mv /tmp/server.conf /usr/local/etc/zabbix_agentd.conf.d'
+end
+
+
+# monit による zabbix_agentd 監視の設定
+task :setup_monit_zabbix_agentd do
+        run 'sudo mkdir -p /etc/monit.d'
+        put unindent(<<-'CONF'), '/tmp/zabbix_agentd.monit'
+                check process zabbix_agentd with pidfile /var/run/zabbix/zabbix_agentd.pid
+                start program = "/etc/init.d/zabbix_agentd start"
+                stop  program = "/etc/init.d/zabbix_agentd stop"
+                if 5 restarts within 5 cycles then timeout
+        CONF
+        run 'sudo mv /tmp/zabbix_agentd.monit /etc/monit.d'
+end
+
+end # End of namespace :zabbix_agentd
