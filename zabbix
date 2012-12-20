@@ -10,7 +10,7 @@ load 'awstool'
 load 'sys_ntp'
 load 'web_apache'
 load 'db_mysql'
-
+load 'monit'
 
 #############################################################################
 ## Attribute.
@@ -50,17 +50,26 @@ namespace :serverTemplate do
 # Zabbix のクリーンインストール
 desc "Build Zabbix Server"
 task :install do
+	sys_ntp.install_ntpd
         sys_ntp.setup_JST
         #awstool.setup_s3cmd
         #awstool.setup_backupconf
         #awstool.setup_backup_file_and_db_script
         #awstool.setup_shutdowntime_run_backupscript
         #awstool.do_tar_schedule_enable
+	monit.install_monit
+	monit.setup_monit_crontab 
+	sys_ntp.setup_monit
+	zabbix.setup_monit_zabbix_server
+	zabbix.setup_monit_zabbix_agentd
 	web_apache.install_apache
 	db_mysql.install_mysql_5_5
 	db_mysql.operationalTask.do_start
 	zabbix.install_zabbix
 	web_apache.operationalTask.do_start
+	zabbix.config_zabbix_server
+	zabbix.config_zabbix_agent
+	web_apache.setup_monit_httpd
 	zabbix.puts_messages
 end
 
@@ -68,18 +77,25 @@ end
 # バックアップからのリストア ( Work )
 desc "Build Zabbix Server"
 task :restore do
+	sys_ntp.install_ntpd
         sys_ntp.setup_JST
         awstool.setup_s3cmd
         awstool.setup_backupconf
         awstool.setup_backup_file_and_db_script
         awstool.setup_shutdowntime_run_backupscript
         awstool.do_tar_schedule_enable
+	monit.install_monit
+	monit.setup_monit_crontab 
+	sys_ntp.setup_monit
+	zabbix.setup_monit_zabbix_server
+	zabbix.setup_monit_zabbix_agentd
 	web_apache.install_apache
 	db_mysql.install_mysql_5_5
 	db_mysql.operationalTask.do_start
 	zabbix.install_zabbix
 	zabbix.do_tar_and_dump_import
 	web_apache.operationalTask.do_start
+	web_apache.setup_monit_httpd
 	zabbix.puts_messages
 end
 
@@ -99,6 +115,10 @@ desc "Backup Data & DB"
 task :do_tar_and_dump_export do
 	awstool.do_tar_export
 	db_mysql.operationalTask.do_dump_export
+end
+
+task :start_server do
+	run 'sudo /usr/local/sbin/zabbix_server'
 end
 
 end # End of :operationalTask
@@ -192,18 +212,17 @@ task :install_zabbix do
 	run 'sudo chkconfig --add zabbix_server'
 	run 'sudo chkconfig --add zabbix_agentd'
 
-	# FIXME: 起動しない
-	# zabbix_server と zabbix_agentd の起動
-	run 'sudo service zabbix_server start'
-	run 'sudo service zabbix_agentd start'
-
 	# 日本語 Font の設定
 	# /var/www/html/zabbix/fonts に ipag.ttf をコピー
 	run 'sudo cp /usr/share/fonts/ipa-gothic/ipag.ttf /var/www/html/zabbix/fonts/'
 	# /var/www/html/zabbix/include/defines.inc.php の DejaVuSans を ipag に置換
 	run 'sudo sed -i "s/\'DejaVuSans\'); \/\//\'ipag\'); \/\//" /var/www/html/zabbix/include/defines.inc.php'
 
+	# 履歴の文字化け問題対応
+	run 'echo "alter table zabbix.user_history CHARSET=utf8;"| mysql -u root'
+	run 'echo "alter table zabbix.user_history convert to character set utf8;"| mysql -u root'
 end
+
 
 task :config_zabbix_server do
 	# /usr/local/etc/zabbix_server.conf.d を利用するための設定変更
@@ -278,8 +297,29 @@ task :config_zabbix_agent do
 	run 'sudo mv /tmp/log.conf /usr/local/etc/zabbix_agentd.conf.d'
 end
 
-task :start_server do
-	run 'sudo /bin/bash -x /etc/init.d/zabbix_server start'
+# monit による zabbix_server 監視の設定
+task :setup_monit_zabbix_server do
+        run 'sudo mkdir -p /etc/monit.d'
+        put unindent(<<-'CONF'), '/tmp/zabbix_server.monit'
+                check process zabbix_server with pidfile /var/run/zabbix/zabbix_server.pid
+                start program = "/etc/init.d/zabbix_server start"
+                stop  program = "/etc/init.d/zabbix_server stop"
+                if 5 restarts within 5 cycles then timeout
+        CONF
+        run 'sudo mv /tmp/zabbix_server.monit /etc/monit.d'
+end
+
+
+# monit による zabbix_agentd 監視の設定
+task :setup_monit_zabbix_agentd do
+        run 'sudo mkdir -p /etc/monit.d'
+        put unindent(<<-'CONF'), '/tmp/zabbix_agentd.monit'
+                check process zabbix_agentd with pidfile /var/run/zabbix/zabbix_agentd.pid
+                start program = "/etc/init.d/zabbix_agentd start"
+                stop  program = "/etc/init.d/zabbix_agentd stop"
+                if 5 restarts within 5 cycles then timeout
+        CONF
+        run 'sudo mv /tmp/zabbix_agentd.monit /etc/monit.d'
 end
 
 
@@ -303,6 +343,7 @@ task :do_tar_and_dump_import do
 	# DB のリストア
 	db_mysql.operationalTask.do_dump_import
 end
+
 
 task :puts_messages do
         # インスタンスに割り当てられている Public の Hostname を取得
