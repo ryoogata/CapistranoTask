@@ -166,14 +166,14 @@ task :install_zabbix do
 		pid-file=/var/run/mysqld/mysqld.pid
         MYCNF
 	run 'yes | sudo cp -f /tmp/my.cnf /etc/my.cnf'
-	run 'sudo rm -rf /tmp/my.conf'
+	run 'sudo rm -rf /tmp/my.cnf'
 
 	# MySQL の再起動
 	db_mysql.operationalTask.do_start
 
 	# Zabbix の Source の Download とコンパイル
 	run "wget -P /tmp 'http://downloads.sourceforge.net/project/zabbix/ZABBIX%20Latest%20Stable/#{_ZABBIX_VERSION}/zabbix-#{_ZABBIX_VERSION}.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fzabbix%2F&ts=1351499277&use_mirror=jaist'"
-	run "tar xzpvf /tmp/zabbix-#{_ZABBIX_VERSION}.tar.gz -C /tmp"
+	run "tar xzpf /tmp/zabbix-#{_ZABBIX_VERSION}.tar.gz -C /tmp"
 	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; ./configure --with-net-snmp --enable-server --enable-agent --with-mysql=/usr/lib64/mysql/mysql_config"
 	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; make"
 	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; sudo make install"
@@ -202,7 +202,9 @@ task :install_zabbix do
 	run 'sudo chown -R apache /var/www/html'
 
 	# zabbix_server 用のユーザ ( zabbix ) を追加
-	run 'sudo adduser zabbix'
+	unless remote_file_include?("/etc/passwd", "zabbix")
+		run 'sudo adduser zabbix'
+	end
 
 	# zabbix_server と zabbix_agentd の起動準備と起動
 	run "sudo cp /tmp/zabbix-#{_ZABBIX_VERSION}/misc/init.d/fedora/core5/zabbix_server /etc/init.d/"
@@ -221,6 +223,11 @@ task :install_zabbix do
 	# 履歴の文字化け問題対応
 	run 'echo "alter table zabbix.user_history CHARSET=utf8;"| mysql -u root'
 	run 'echo "alter table zabbix.user_history convert to character set utf8;"| mysql -u root'
+
+	# Source の削除
+	run "sudo rm -rf /tmp/zabbix-#{_ZABBIX_VERSION}.tar.gz"
+	run "sudo rm -rf /tmp/zabbix-#{_ZABBIX_VERSION}"
+	
 end
 
 
