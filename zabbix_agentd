@@ -41,7 +41,9 @@ task :install_zabbix_agentd do
 	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; sudo make install"
 
 	# zabbix_agentd 用のユーザ ( zabbix ) を追加
-	run 'sudo adduser zabbix'
+	unless remote_file_include?("/etc/passwd", "zabbix")
+		run 'sudo adduser zabbix'
+	end
 
 	# zabbix_agentd の起動準備と起動
 	run "sudo cp /tmp/zabbix-#{_ZABBIX_VERSION}/misc/init.d/fedora/core5/zabbix_agentd /etc/init.d/"
