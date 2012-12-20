@@ -1,0 +1,26 @@
+#############################################################################
+## ROLES.
+role :server, '設定したいサーバのFQDN or IP Address'
+
+
+set :user, 'ec2-user'
+#set :user, 'root'
+set :sudo_password, ''
+
+default_run_options[:pty] = true
+
+ssh_options[:keys] = %w(ローカルにある SSH の Key の指定)
+ssh_options[:auth_methods] = %w(publickey)
+
+set :use_sudo, true
+
+##########################################################################
+## Utilities.
+def unindent(s)
+  return s.gsub(/^\s+/, '')
+end
+
+# ファイルが存在しているか否かの確認
+def remote_file_exists?(full_path)
+  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
