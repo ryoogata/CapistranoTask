@@ -60,6 +60,7 @@ task :install_mod_evasive do
 	run 'sudo cp /tmp/modevasive.conf /etc/httpd/conf.d'
 end
 
+
 # WAF の mod_security のインストール
 desc "Install mod_security"
 task :install_mod_security do
@@ -75,6 +76,19 @@ task :install_mod_security do
 	run "cd /tmp/modsecurity-apache_#{MODSECURITY_VERSION} ; ./configure ; make ; sudo make install"
 	run 'sudo mkdir -p /etc/httpd/modsecurity.d/activated_rules'
 	run 'cd /tmp ; git clone git://github.com/SpiderLabs/owasp-modsecurity-crs.git'
+end
+
+
+# monit による httpd 監視の設定
+task :setup_monit_httpd do
+        run 'sudo mkdir -p /etc/monit.d'
+        put unindent(<<-'CONF'), '/tmp/httpd.monit'
+		check process httpd with pidfile /var/run/httpd/httpd.pid
+		start program = "/etc/init.d/httpd start" with timeout 60 seconds
+		stop program  = "/etc/init.d/httpd stop"
+		group apache
+        CONF
+        run 'sudo mv /tmp/httpd.monit /etc/monit.d'
 end
 
 end # End of namespace :web_apache
