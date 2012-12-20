@@ -1,0 +1,50 @@
+##########################################################################
+## Support.	
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+
+
+#############################################################################
+## Attribute.
+
+
+#############################################################################
+namespace :serverTemplate do
+
+# *** のクリーンインストール
+desc "Build *** Server"
+task :install do
+
+end
+
+
+# バックアップからのリストア
+desc "Restore from S3 Backup *** Server"
+task :restore do
+
+end
+
+end # End of namespace :serverTemplate
+
+
+#############################################################################
+## TASKS.
+
+namespace :*** do
+
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+
+end	# End of namespace :***
