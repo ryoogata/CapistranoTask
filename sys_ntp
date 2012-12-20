@@ -12,9 +12,11 @@ namespace :sys_ntp do
 
 namespace :operationalTask do
 
+#FIXME: リモートから起動できない
 desc "Start ntp Server"
 task :do_start do
-        run 'sudo /etc/init.d/ntpd start'
+	#run 'sudo /etc/init.d/ntpd start'
+	run 'sudo service ntpd start'
 end
 
 desc "Stop ntp Server"
@@ -46,6 +48,7 @@ end # End of namespace :operationalTask do
 desc "Install ntpd"
 task :install_ntpd do
 	run 'sudo yum -y install ntp'
+        run 'sudo chkconfig ntpd on'
 end
 
 
@@ -53,6 +56,18 @@ end
 desc "SYS Timezone set ( JST )"
 task :setup_JST do
         run 'yes | sudo cp -f /usr/share/zoneinfo/Japan /etc/localtime'
+end
+
+# monit による監視の設定
+task :setup_monit do
+	run 'sudo mkdir -p /etc/monit.d'
+	put unindent(<<-'CONF'), '/tmp/ntpd.monit'
+		check process ntpd with pidfile /var/run/ntpd.pid
+		start program = "/etc/init.d/ntpd start"
+		stop  program = "/etc/init.d/ntpd stop"
+		if 5 restarts within 5 cycles then timeout
+	CONF
+	run 'sudo mv /tmp/ntpd.monit /etc/monit.d'
 end
 
 end # namespace :sys_ntp
