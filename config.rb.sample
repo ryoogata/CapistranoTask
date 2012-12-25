@@ -24,3 +24,10 @@ end
 def remote_file_exists?(full_path)
   'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
 end
+
+# RPM パッケージのインストール状況確認 ( インストールされていない場合 true を返す )
+def package_not_install?(package)
+  return capture("rpm -ql #{package} || :").include?("is not installed")
+end
+
+
