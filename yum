@@ -12,7 +12,7 @@ namespace :yum do
 desc "default: Setup CentOS epel Repository ( x86_64 )"
 task :setup_epel do
   run <<-CMD
-    sudo rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-7.noarch.rpm
+    sudo rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-8.noarch.rpm
   CMD
 end
 
