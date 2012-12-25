@@ -11,18 +11,26 @@ namespace :yum do
 # EPEL レポジトリのインストール
 desc "default: Setup CentOS epel Repository ( x86_64 )"
 task :setup_epel do
-  run <<-CMD
-    sudo rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-8.noarch.rpm
-  CMD
+
+	# パッケージがインストールされていない場合はインストール
+	if package_not_install?("epel-release")
+  		run <<-CMD
+    			sudo rpm -Uv http://ftp-srv2.kddilabs.jp/Linux/distributions/fedora/epel/6/x86_64/epel-release-6-8.noarch.rpm
+  		CMD
+	end
 end
 
 
 # RPMForge レポジトリのインストール
 desc "default: Setup CentOS rpmforge Repository ( x86_64 )"
 task :setup_rpmforge do
-  run <<-CMD
-    sudo rpm -Uv http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm
-  CMD
+
+	# パッケージがインストールされていない場合はインストール
+	if package_not_install?("rpmforge-release")
+		run <<-CMD
+			sudo rpm -Uv http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.2-2.el6.rf.x86_64.rpm
+		CMD
+	end
 end
 
 
