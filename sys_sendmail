@@ -1,0 +1,75 @@
+##########################################################################
+## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)	
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+
+
+#############################################################################
+## Attribute.
+
+# メールを受信するドメインを指定
+set :_DOMAIN, 'yggdrasillnetwork.net,blog.yggdrasillnetwork.net'
+
+# 送信メールサーバの固定ホストの指定
+set :_SMART_HOST, 'smtp.your.provider'
+
+
+#############################################################################
+## TASKS.
+
+namespace :sys_sendmail do
+
+# sendmail.mc を編集するためのツールのインストール
+desc "Setup sendmail-cf tools'
+task :setup_CF do
+        # 必要なパッケージのインストール
+        packages = %w[
+		sendmail-cf make mailx
+        ]
+        run "sudo yum -y install #{packages.join(' ')}"
+end
+
+
+# sendmail がメールを受け取るドメインを設定
+desc "Setup local-host-names Configuration"
+task :setup_localhostnames do
+	put unindent(<<-CONF), '/tmp/domain.txt'
+		#{_DOMAIN.sub(/,/, "\n")}
+	CONF
+	run 'sudo sh -c "cat /tmp/domain.txt >> /etc/mail/local-host-names"'	
+	run 'rm -rf /tmp/domain.txt'
+	run 'cd /etc/mail ; sudo make sendmail.cf ; sudo make restart'
+end
+
+
+# リレーを許可する設定を実行
+desc "Setup Accept Relay Configuration"
+task :setup_accept_relay do
+	run 'sudo sed -i "s/DAEMON_OPTIONS(\`Port=smtp,Addr=127.0.0.1, Name=MTA\')/dnl DAEMON_OPTIONS(\`Port=smtp,Addr=127.0.0.1, Name=MTA\')/" /etc/mail/sendmail.mc'
+	run 'cd /etc/mail ; sudo make sendmail.cf ; sudo make restart'
+end
+
+
+# 送信メールサーバの指定
+desc "Setup smarhost Configuration"
+task :setup_smarthost do
+	run "sudo sed -i \"s/dnl define(\\`SMART_HOST', \\`smtp.your.provider')dnl/define\(\\`SMART_HOST', \\`#{_SMART_HOST}')dnl/\" /etc/mail/sendmail.mc" 
+	run 'cd /etc/mail ; sudo make sendmail.cf ; sudo make restart'
+end
+
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+
+end	# End of namespace :sys_sendmail
