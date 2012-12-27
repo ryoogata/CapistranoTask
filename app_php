@@ -1,0 +1,52 @@
+##########################################################################
+## Support.	
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+
+
+#############################################################################
+## Attribute.
+
+
+#############################################################################
+## TASKS.
+
+namespace :app_php do
+
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+# apache のインストール
+desc "Install PHP"
+task :install_php do
+        # 必要なパッケージのインストール
+        packages = %w[
+		php php-mysql php-pear
+        ]
+        run "sudo yum -y install #{packages.join(' ')}"
+end
+
+
+# phpinfo.php の生成
+desc "Create phpinfo.php"
+task :put_phpinfo do
+	put unindent(<<-'CONF'), '/tmp/phpinfo.php'
+		<?php
+		phpinfo();
+		?>
+	CONF
+	run 'sudo mv /tmp/phpinfo.php /var/www/html'
+end
+
+end	# End of namespace :app_php
