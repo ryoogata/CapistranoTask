@@ -36,7 +36,12 @@ end # End of namespace :operationalTask do
 # apache のインストール
 desc "Install apache"
 task :install_apache do
-	run 'sudo yum -y install httpd httpd-devel gcc make'
+	# 必要なパッケージのインストール
+	packages = %w[
+		httpd httpd-devel
+		gcc make
+	]
+	run "sudo yum -y install #{packages.join(' ')}"
 	run 'sudo chkconfig httpd on'
 end
 
@@ -45,7 +50,7 @@ end
 desc "Install mod_evasive"
 task :install_mod_evasive do
 	run 'wget -P /tmp http://www.zdziarski.com/blog/wp-content/uploads/2010/02/mod_evasive_1.10.1.tar.gz'
-	run 'cd /tmp ; tar xzpvf mod_evasive_1.10.1.tar.gz'
+	run 'cd /tmp ; tar xzpf mod_evasive_1.10.1.tar.gz'
 	run 'cd /tmp/mod_evasive ; sudo apxs -i -a -c mod_evasive20.c'
        	put unindent(<<-'CONF'), '/tmp/modevasive.conf'
 	<IfModule mod_evasive20.c>
@@ -68,14 +73,34 @@ task :install_mod_security do
 	MODSECURITY_VERSION = '2.7.1'
 
 	# mod_security インストールに必要なパッケージのインストール
-	run 'sudo yum -y install pcre-devel libxml2-devel libcurl-devel git'
+	packages = %w[
+		pcre-devel libxml2-devel libcurl-devel git
+	]
+	run "sudo yum -y install #{packages.join(' ')}"
 
 	# mod_security のインストール
 	run "wget -P /tmp https://github.com/downloads/SpiderLabs/ModSecurity/modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
-	run "cd /tmp ; tar xzpvf modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
+	run "cd /tmp ; tar xzpf modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
 	run "cd /tmp/modsecurity-apache_#{MODSECURITY_VERSION} ; ./configure ; make ; sudo make install"
 	run 'sudo mkdir -p /etc/httpd/modsecurity.d/activated_rules'
 	run 'cd /tmp ; git clone git://github.com/SpiderLabs/owasp-modsecurity-crs.git'
+        put unindent(<<-'CONF'), '/tmp/modsecurity.conf'
+		LoadModule unique_id_module modules/mod_unique_id.so
+		LoadModule security2_module modules/mod_security2.so
+		
+		<IfModule mod_security2.c>
+		# This is the ModSecurity Core Rules Set.
+		# Basic configuration goes in here
+		Include modsecurity.d/activated_rules/*.conf
+		</IfModule>
+		
+        CONF
+	run 'sed -i "s%#SecDebugLog /opt/modsecurity/var/log/debug.log%SecDebugLog /var/log/debug.log%" /tmp/modsecurity.conf'
+	run 'sed -i "s%#SecDebugLogLevel 3%SecDebugLogLevel 3%" /tmp/modsecurity.conf'
+	run 'sudo mv /tmp/modsecurity.conf /etc/httpd/conf.d/modsecurity.conf'
+	run "sudo sh -c \"cat /tmp/modsecurity-apache_#{MODSECURITY_VERSION}/modsecurity.conf-recommended >> /etc/httpd/conf.d/modsecurity.conf\""
+	run 'sudo cp /tmp/owasp-modsecurity-crs/modsecurity_crs_10_setup.conf.example /etc/httpd/conf.d/modsecurity_crs_10_setup.conf'
+	run "ls /tmp/owasp-modsecurity-crs/base_rules | sudo xargs -I 'STRINGS' ln -s /tmp/owasp-modsecurity-crs/base_rules/'STRINGS' /etc/httpd/modsecurity.d/activated_rules/'STRINGS'"
 end
 
 
