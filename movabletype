@@ -1,6 +1,6 @@
 ##########################################################################
 ## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
-## Build estimate: 10 minute (serverTemplate:install)[t1.micro]
+##		Rackspace Next Generation Cloud Servers CentOS 6.3
 
 
 #############################################################################
@@ -123,6 +123,7 @@ task :install_packages do
 		perl-GD perl-XML-Parser perl-Mail-Sendmail perl-Archive-Tar perl-CPAN perl-YAML perl-Image-Size
 		perl-File-Which perl-Test-Base perl-IO-String
 		perl-Imager perl-Data-Buffer 
+		unzip
         ]
         run "sudo yum -y install #{packages.join(' ')}"
 
@@ -230,7 +231,8 @@ task :puts_messages do
 
 	# メッセージの出力
 	puts	
-	puts "インストール後, http://#{PUBLIC_DNS}/cgi-bin/mt/mt-wizard.cgi にアクセスして Setup を実行"
+	puts "http://#{PUBLIC_DNS}/cgi-bin/mt/mt-wizard.cgi"
+	puts "にアクセスして Setup を実行"
 	puts	
 	puts "スタティックウェブパスには http://#{PUBLIC_DNS}/mt-static を入力"
 	puts "スタティックファイルパスは /var/www/html/mt-static と Default を入力"
