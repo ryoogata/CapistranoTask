@@ -141,7 +141,7 @@ end
 desc "Install s3cmd & setup"
 task :setup_s3cmd do
 	# python-magic のインストール
-	run 'sudo yum -y install python-magic'
+	run 'sudo yum -y install python-magic unzip'
 
 	# s3cmd の Download とインストール
 	unless remote_file_exists?("/tmp/s3cmd-1.1.0-beta3.zip")
