@@ -1,6 +1,6 @@
 ##########################################################################
 ## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
-##
+##		Rackspace Next Generation Cloud Servers CentOS 6.3
 
 
 #############################################################################
@@ -27,7 +27,7 @@ set :_S3_BUCKETS_NAME, 'ogata_buckets'
 # バックアップファイルは Prefix + date の形式で保存される
 # ( e.g fswiki201210262316.tgz )
 #set :_BACKUPED_FILE_PREFIX, 'fswikibook'
-set :_BACKUPED_FILE_PREFIX, 'fswiki'
+set :_BACKUPED_FILE_PREFIX, 'fswikiSample'
 
 # 下記 Attribute は config.rb に記載している
 # set :_ACCESS_KEY
@@ -95,7 +95,10 @@ end # End of namespace :operationalTask do
 desc "install fswiki"
 task :install_fswiki do
 	# fswiki インストールの事前準備
-	run 'sudo yum -y install perl-CGI'
+	packages = %w[
+		perl-CGI unzip
+	]
+	run "sudo yum -y install #{packages.join(' ')}"
 
 	# Source の Download と展開
         unless remote_file_exists?("/tmp/wiki3_6_4.zip")
