@@ -131,7 +131,7 @@ task :install_fswiki do
 		sudo mkdir #{_BACKUP_DIRECTORY}/data &&
 		sudo mkdir #{_BACKUP_DIRECTORY}/log &&
 		sudo mkdir #{_BACKUP_DIRECTORY}/pdf &&
-		sudo mkdir #{_BACKUP_DIRECTORY}/plugin && # Default ではない、追加した plugin 用の Directory
+		sudo mkdir #{_BACKUP_DIRECTORY}/plugin &&
 		sudo ln -s #{_BACKUP_DIRECTORY}/attach #{_MAIN_DIRECTORY} &&
 		sudo ln -s #{_BACKUP_DIRECTORY}/backup #{_MAIN_DIRECTORY} &&
 		sudo ln -s #{_BACKUP_DIRECTORY}/log #{_MAIN_DIRECTORY} &&
