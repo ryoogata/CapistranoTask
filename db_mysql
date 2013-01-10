@@ -66,12 +66,16 @@ desc "Restore DB"
 task :do_dump_import do
 	run <<-CMD
 		# S3 に保存しているデータの Download
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX} | grep db | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_DB_PREFIX}//' | sed 's/.db//' | sort -r | head -n 1 \
-		| xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}'STRINGS'.db /tmp  &&
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX} | grep db | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_DB_PREFIX}//" | sed 's/.db//' | sort -r | head -n 1 \
+		| xargs -i sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}{}.db /tmp  &&
 
 		# リストア作業
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX} | grep db | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_DB_PREFIX}//' | sed 's/.db//' | sort -r | head -n 1 \
-		| xargs -I 'STRINGS' sudo sh -c "mysql < /tmp/#{_BACKUPED_DB_PREFIX}'STRINGS'.db"
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX} | grep db | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_DB_PREFIX}//" | sed 's/.db//' | sort -r | head -n 1 \
+		| xargs -i sudo sh -c "mysql < /tmp/#{_BACKUPED_DB_PREFIX}{}.db"
+
+		# ファイルの削除
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX} | grep db | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_DB_PREFIX}//" | sed 's/.db//' | sort -r | head -n 1 \
+		| xargs -i sudo rm -rf /tmp/#{_BACKUPED_DB_PREFIX}{}.db
 	CMD
 end
 
