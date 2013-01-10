@@ -72,14 +72,14 @@ desc "Inport backuped file via S3 buckets"
 task :do_tar_import do
         run <<-CMD
                 # S3 に保存しているデータの Download
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-                | xargs -I 'STRINGS' sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz /tmp &&
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_FILE_PREFIX}//" | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -i sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}{}.tgz /tmp &&
                 # リストア作業
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-                | xargs -I 'STRINGS' sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz -C / &&
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_FILE_PREFIX}//" | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -i sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}{}.tgz -C / &&
                 # ファイルの削除
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed 's/#{_BACKUPED_FILE_PREFIX}//' | sed 's/.tgz//' | sort -r | head -n 1 \
-                | xargs -I 'STRINGS' sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}'STRINGS'.tgz
+                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_FILE_PREFIX}//" | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -i sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}{}.tgz
         CMD
 end
 
