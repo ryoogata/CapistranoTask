@@ -56,7 +56,7 @@ task :do_dump_export do
 
 	run <<-CMD
 		sudo mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --database mysql #{_DB_NAME} | gzip -c > /tmp/#{_BACKUPED_DB_PREFIX}-#{FILENAME}.gz &&
-		sudo s3cmd put /tmp/#{_BACKUPED_DB_PREFIX}-#{FILENAME}.gz s3://#{_S3_BUCKETS_NAME} &&
+		sudo s3cmd put /tmp/#{_BACKUPED_DB_PREFIX}-#{FILENAME}.gz s3://#{_S3_BUCKETS_NAME}/ &&
 		sudo rm -rf /tmp/#{_BACKUPED_DB_PREFIX}-#{FILENAME}.gz
 	CMD
 end
@@ -66,19 +66,19 @@ desc "Restore DB"
 task :do_dump_import do
 	run <<-CMD
 		# S3 に保存しているデータの Download
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_DB_PREFIX}-//" | sed 's/.gz//' | sort -r | head -n 1 \
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
 		| xargs -i sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-{}.gz /tmp &&
 
 		# 圧縮ファイルの解凍
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_DB_PREFIX}-//" | sed 's/.gz//' | sort -r | head -n 1 \
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
 		| xargs -i sudo gunzip /tmp/#{_BACKUPED_DB_PREFIX}-{}.gz &&
 
 		# リストア作業
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_DB_PREFIX}-//" | sed 's/.gz//' | sort -r | head -n 1 \
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
 		| xargs -i sudo sh -c "mysql < /tmp/#{_BACKUPED_DB_PREFIX}-{}" &&
 
 		# ファイルの削除
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_DB_PREFIX}-//" | sed 's/.gz//' | sort -r | head -n 1 \
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
 		| xargs -i sudo rm -rf /tmp/#{_BACKUPED_DB_PREFIX}-{}
 	CMD
 end
