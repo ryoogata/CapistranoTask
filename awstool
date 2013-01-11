@@ -133,7 +133,8 @@ task :setup_s3fs do
 	run 'sudo chown root:root /etc/passwd-s3fs'
 	run 'sudo chmod 600 /etc/passwd-s3fs'
 
-	#s3fs blog.yggdrasillnetwork.net /var/www/html/yggdrasill_network_blog -o default_acl=public-read -o allow_other 
+	# 不要な Directory の削除
+	run 'sudo rm -rf /tmp/s3fs-cloudpack'
 end
 
 
@@ -201,6 +202,10 @@ task :setup_s3cmd do
        	run 'sudo mv /tmp/.s3cfg /root'
 	run 'sudo chown root:root /root/.s3cfg'
 	run 'sudo chmod 600 /root/.s3cfg'
+
+	# ファイルの削除
+	run 'sudo rm -rf /tmp/s3cmd-1.1.0-beta3.zip'
+	run 'sudo rm -rf /tmp/s3cmd-1.1.0-beta3'
 end
 
 
