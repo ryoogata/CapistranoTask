@@ -60,9 +60,9 @@ task :do_tar_export do
         FILENAME = `date +%Y%m%d%H%M`
 
         run <<-CMD
-                sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz --files-from /root/backup.conf &&
-                sudo s3cmd -c /root/.s3cfg  put /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME} &&
-                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}#{FILENAME}.tgz
+                sudo tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}-#{FILENAME}.tgz --files-from /root/backup.conf &&
+                sudo s3cmd -c /root/.s3cfg  put /tmp/#{_BACKUPED_FILE_PREFIX}-#{FILENAME}.tgz s3://#{_S3_BUCKETS_NAME}/ &&
+                sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}-#{FILENAME}.tgz
         CMD
 end
 
@@ -72,14 +72,15 @@ desc "Inport backuped file via S3 buckets"
 task :do_tar_import do
         run <<-CMD
                 # S3 に保存しているデータの Download
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_FILE_PREFIX}//" | sed 's/.tgz//' | sort -r | head -n 1 \
-                | xargs -i sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}{}.tgz /tmp &&
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}- | grep tgz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}-%%" | sed 's/.tgz//' | sort -r | head -n 1 \
+
+                | xargs -i sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}-{}.tgz /tmp &&
                 # リストア作業
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_FILE_PREFIX}//" | sed 's/.tgz//' | sort -r | head -n 1 \
-                | xargs -i sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}{}.tgz -C / &&
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}- | grep tgz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}-%%" | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -i sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}-{}.tgz -C / &&
                 # ファイルの削除
-                sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX} | grep tgz | awk '{print $4}' | awk -F/ '{print $4}' | sed "s/#{_BACKUPED_FILE_PREFIX}//" | sed 's/.tgz//' | sort -r | head -n 1 \
-                | xargs -i sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}{}.tgz
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}- | grep tgz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}-%%" | sed 's/.tgz//' | sort -r | head -n 1 \
+                | xargs -i sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}-{}.tgz
         CMD
 end
 
@@ -106,6 +107,7 @@ task :setup_pem_root do
 	run 'echo EC2_URL=https://ec2.us-west-1.amazonaws.com | sudo tee -a /root/.bash_profile'
 	run 'echo export EC2_PRIVATE_KEY EC2_CERT EC2_URL | sudo tee -a /root/.bash_profile'
 end
+
 
 # s3fs のセットアップ
 # ( 本家の s3fs だと s3 のディレクトリが見えないバグがあるので、cloudpack の修正版を利用 )
@@ -273,13 +275,13 @@ task :setup_backup_file_script do
                 FILENAME=`date +%Y%m%d%H%M`
 
 		if [ -f /root/exclude.conf ]; then
-                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf --exclude-from /root/exclude.conf
+                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz --files-from /root/backup.conf --exclude-from /root/exclude.conf
 		else
-                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz --files-from /root/backup.conf
 		fi
 			
-                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
-                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}/
+                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz
         SCRIPT
         run 'sudo mv /tmp/backup2s3.sh /root'
         run 'sudo chmod +x /root/backup2s3.sh'
@@ -293,9 +295,9 @@ task :setup_backup_db_script do
                 #!/bin/sh
                 FILENAME=`date +%Y%m%d%H%M`
 
-                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db &&
-                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db s3://#{_S3_BUCKETS_NAME} &&
-                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
+                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} | gzip -c > /tmp/#{_BACKUPED_DB_PREFIX}-$FILENAME.gz &&
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}-$FILENAME.gz s3://#{_S3_BUCKETS_NAME}/ &&
+                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}-$FILENAME.gz
         SCRIPT
         run 'sudo mv /tmp/backup2s3.sh /root'
         run 'sudo chmod +x /root/backup2s3.sh'
@@ -310,16 +312,16 @@ task :setup_backup_file_and_db_script do
                 FILENAME=`date +%Y%m%d%H%M`
 
 		if [ -f /root/exclude.conf ]; then
-                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf --exclude-from /root/exclude.conf
+                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz --files-from /root/backup.conf --exclude-from /root/exclude.conf
 		else
-                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz --files-from /root/backup.conf
+                	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz --files-from /root/backup.conf
 		fi
-                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}/
                 rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
 
-                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} > /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
-                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db s3://#{_S3_BUCKETS_NAME}
-                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}$FILENAME.db
+                mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} | gzip -c > /tmp/#{_BACKUPED_DB_PREFIX}-$FILENAME.gz &&
+                s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}-$FILENAME.gz s3://#{_S3_BUCKETS_NAME}/ &&
+                rm -rf /tmp/#{_BACKUPED_DB_PREFIX}-$FILENAME.gz
         SCRIPT
         run 'sudo mv /tmp/backup2s3.sh /root'
         run 'sudo chmod +x /root/backup2s3.sh'
