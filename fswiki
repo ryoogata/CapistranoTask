@@ -21,7 +21,7 @@ set :_MAIN_DIRECTORY, '/var/www/cgi-bin/wiki'
 set :_BACKUP_DIRECTORY, '/opt/wiki'
 
 # バックアップファイルを保存する s3 buckets
-set :_S3_BUCKETS_NAME, 'ogata_buckets'
+set :_S3_BUCKETS_NAME, 'ogata_buckets/sample'
 
 # バックアップするファイル名の Prefix
 # バックアップファイルは Prefix + date の形式で保存される
@@ -95,10 +95,10 @@ end # End of namespace :operationalTask do
 desc "install fswiki"
 task :install_fswiki do
 	# fswiki インストールの事前準備
-	packages = %w[
-		perl-CGI unzip
-	]
-	run "sudo yum -y install #{packages.join(' ')}"
+	run <<-CMD
+		sudo yum -y install \
+			perl-CGI unzip
+	CMD
 
 	# Source の Download と展開
         unless remote_file_exists?("/tmp/wiki3_6_4.zip")
