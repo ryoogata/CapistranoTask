@@ -114,13 +114,13 @@ end
 desc "Install s3fs & setup"
 task :setup_s3fs do
         # 事前に必要なパッケージをインストール
-        packages = %w[
-		fuse fuse-devel 
-		gcc-c++ make
-		curl-devel libxml2-devel openssl-devel
+	run <<-CMD
+	sudo yum -y install \
+		fuse fuse-devel \
+		gcc-c++ make \
+		curl-devel libxml2-devel openssl-devel \
 		git
-        ]
-        run "sudo yum -y install #{packages.join(' ')}"
+	CMD
 
 	#s3fs の Download とインストール
         run <<-CMD
@@ -144,7 +144,10 @@ end
 desc "Install s3cmd & setup"
 task :setup_s3cmd do
 	# python-magic のインストール
-	run 'sudo yum -y install python-magic unzip'
+	run <<-CMD
+		sudo yum -y install \
+			python-magic unzip
+	CMD
 
 	# s3cmd の Download とインストール
 	unless remote_file_exists?("/tmp/s3cmd-1.1.0-beta3.zip")
