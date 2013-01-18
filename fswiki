@@ -21,7 +21,7 @@ set :_MAIN_DIRECTORY, '/var/www/cgi-bin/wiki'
 set :_BACKUP_DIRECTORY, '/opt/wiki'
 
 # バックアップファイルを保存する s3 buckets
-set :_S3_BUCKETS_NAME, 'ogata_buckets/sample'
+set :_S3_BUCKETS_NAME, 'ogata_buckets/fswikibackup'
 
 # バックアップするファイル名の Prefix
 # バックアップファイルは Prefix + date の形式で保存される
@@ -166,7 +166,13 @@ task :install_fswiki do
 		sudo chown -R apache #{_BACKUP_DIRECTORY}
 	CMD
 
-	# http://<Instance Public DNS>/cgi-bin/wiki/wiki.cgi にアクセス
+	# 不要ファイルの削除
+	run 'sudo rm -rf /tmp/wiki3_6_4.zip'
+	run 'sudo rm -rf /tmp/wiki3_6_4'
+	run 'sudo rm -rf /tmp/fswiki-patch-20110813.zip'
+	run 'sudo rm -rf /tmp/fswiki-patch-20110813'
+	run 'sudo rm -rf /tmp/fswiki-pache-20110823.zip'
+	run 'sudo rm -rf /tmp/fswiki-pache-20110823'
 end
 
 
@@ -176,7 +182,7 @@ task :do_tar_restore do
 	awstool.do_tar_import
 
 	# plugin 用の link を作成
-	run "ls /opt/wiki/plugin | sudo xargs -I 'STRINGS' ln -s /opt/wiki/plugin/'STRINGS' /var/www/cgi-bin/wiki/plugin/'STRINGS'"
+	run "ls /opt/wiki/plugin | sudo xargs -i ln -s /opt/wiki/plugin/{} /var/www/cgi-bin/wiki/plugin/{}"
 
 	# パーミッションの変更
         run <<-CMD
