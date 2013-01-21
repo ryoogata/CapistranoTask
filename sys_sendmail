@@ -30,7 +30,7 @@ task :setup_CF do
         packages = %w[
 		sendmail-cf make mailx
         ]
-        run "sudo yum -y install #{packages.join(' ')}"
+        run "sudo yum -q -y install #{packages.join(' ')}"
 end
 
 
