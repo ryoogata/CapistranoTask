@@ -135,7 +135,7 @@ task :install_zabbix do
 		net-snmp net-snmp-devel net-snmp-utils
 		ipa-gothic-fonts
 	]
-	run "sudo yum -y install #{packages.join(' ')}"
+	run "sudo yum -q -y install #{packages.join(' ')}"
 
 
 	# MySQL の設定
