@@ -45,8 +45,12 @@ end # End of namespace :operationalTask do
 # monit のインストール
 desc "Install monit"
 task :install_monit do
-	run 'sudo yum -y install monit'
+	run <<-CMD
+		sudo yum -q -y install \
+			monit
+	CMD
 end
+
 
 # cron で monit を実行するための設定
 desc "Setup cron monit"
