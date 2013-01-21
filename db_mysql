@@ -92,7 +92,7 @@ end # End of namespace :operationalTask
 # MySQL 5.5 のインストール
 desc "Install MySQL 5.5"
 task :install_mysql_5_5 do
-        run 'sudo yum -y install mysql mysql-devel mysql-server'
+        run 'sudo yum -q -y install mysql mysql-devel mysql-server'
 	run 'sudo chkconfig mysqld on'
 end
 
