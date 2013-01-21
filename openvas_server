@@ -96,7 +96,7 @@ task :install_openvas_server do
 	packages = %w[
 		openvas openvas-manager openvas-scanner
 	]
-	run "yum -y install #{packages.join(' ')}"
+	run "yum -q -y install #{packages.join(' ')}"
 
 	# openvassd.conf の設定
 	run 'sed -i "s/log_plugins_name_at_load = no/log_plugins_name_at_load = yes/" /etc/openvas/openvassd.conf' 

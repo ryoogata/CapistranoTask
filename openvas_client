@@ -74,7 +74,7 @@ task :install_openvas_client do
 		openvas-libraries-devel
 		gpgme-devel gcc make
 	]
-	run "yum -y install #{packages.join(' ')}"
+	run "yum -q -y install #{packages.join(' ')}"
 
 	# Openvas Client の Source の Download と解凍
 	run 'wget -P /tmp http://wald.intevation.org/frs/download.php/845/openvas-client-3.0.3.tar.gz'
