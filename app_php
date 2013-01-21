@@ -34,7 +34,7 @@ task :install_php do
         packages = %w[
 		php php-mysql php-pear
         ]
-        run "sudo yum -y install #{packages.join(' ')}"
+        run "sudo yum -q -y install #{packages.join(' ')}"
 end
 
 
