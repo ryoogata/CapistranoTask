@@ -41,7 +41,7 @@ task :install_apache do
 		httpd httpd-devel
 		gcc make
 	]
-	run "sudo yum -y install #{packages.join(' ')}"
+	run "sudo yum -q -y install #{packages.join(' ')}"
 	run 'sudo chkconfig httpd on'
 end
 
@@ -74,16 +74,16 @@ task :install_mod_security do
 
 	# mod_security インストールに必要なパッケージのインストール
 	packages = %w[
-		pcre-devel libxml2-devel libcurl-devel git
+		pcre-devel pcre-tools libxml2-devel libcurl-devel git
 	]
-	run "sudo yum -y install #{packages.join(' ')}"
+	run "sudo yum -q -y install #{packages.join(' ')}"
 
 	# mod_security のインストール
 	run "wget -P /tmp https://github.com/downloads/SpiderLabs/ModSecurity/modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
 	run "cd /tmp ; tar xzpf modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
-	run "cd /tmp/modsecurity-apache_#{MODSECURITY_VERSION} ; ./configure ; make ; sudo make install"
+	run "cd /tmp/modsecurity-apache_#{MODSECURITY_VERSION} ; ./configure --with-apxs=/usr/sbin/apxs --with-apr=/usr/bin/apr-1-config --with-apu=/usr/bin/apu-1-config --with-pcre=/usr/bin/pcre-config --with-libxml=/usr/bin/xml2-config --disable-pcre-match-limit ; make ; sudo make install"
 	run 'sudo mkdir -p /etc/httpd/modsecurity.d/activated_rules'
-	run 'cd /tmp ; git clone git://github.com/SpiderLabs/owasp-modsecurity-crs.git'
+	run 'cd /tmp ; git clone --quiet git://github.com/SpiderLabs/owasp-modsecurity-crs.git'
         put unindent(<<-'CONF'), '/tmp/modsecurity.conf'
 		LoadModule unique_id_module modules/mod_unique_id.so
 		LoadModule security2_module modules/mod_security2.so
@@ -92,11 +92,10 @@ task :install_mod_security do
 		# This is the ModSecurity Core Rules Set.
 		# Basic configuration goes in here
 		Include modsecurity.d/activated_rules/*.conf
-		</IfModule>
-		
         CONF
 	run 'sed -i "s%#SecDebugLog /opt/modsecurity/var/log/debug.log%SecDebugLog /var/log/debug.log%" /tmp/modsecurity.conf'
 	run 'sed -i "s%#SecDebugLogLevel 3%SecDebugLogLevel 3%" /tmp/modsecurity.conf'
+	run 'echo "</IfModule>" >> /tmp/modsecurity.conf'
 	run 'sudo mv /tmp/modsecurity.conf /etc/httpd/conf.d/modsecurity.conf'
 	run "sudo sh -c \"cat /tmp/modsecurity-apache_#{MODSECURITY_VERSION}/modsecurity.conf-recommended >> /etc/httpd/conf.d/modsecurity.conf\""
 	run 'sudo cp /tmp/owasp-modsecurity-crs/modsecurity_crs_10_setup.conf.example /etc/httpd/conf.d/modsecurity_crs_10_setup.conf'
