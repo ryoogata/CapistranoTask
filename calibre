@@ -1,23 +1,13 @@
 ##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
+## Support.     Amazon Linux AMI 2012.09
+##              AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+
 
 #############################################################################
-## ROLES.
-role :server, ''
+## Settins.
+load 'config.rb'
+load 'default'
 
-set :user, 'ec2-user'
-#set :user, 'root'
-set :sudo_password, ''
-
-default_run_options[:pty] = true
-
-ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
-ssh_options[:auth_methods] = %w(publickey)
-
-set :use_sudo, true
 
 #############################################################################
 ## TASKS.
@@ -26,7 +16,7 @@ desc "install calibre Server Amazon Linux"
 task :install_calibre do
 	username = 'user'
 	password = 'PASS'
-	run 'sudo yum -y install glibc'
+	run 'sudo yum -q -y install glibc'
 	put unindent(<<-'REPO'), '/tmp/CentOS-Base.repo'
 		[base]
 		name=CentOS-6 - Base
@@ -36,12 +26,12 @@ task :install_calibre do
 		gpgkey=http://mirror.centos.org/centos/RPM-GPG-KEY-CentOS-6
 	REPO
 	run 'sudo cp /tmp/CentOS-Base.repo /etc/yum.repos.d/'
-	run 'sudo yum -y install --enablerepo=base xdg-utils'
-	run 'sudo yum -y install ImageMagick'
-	run 'sudo yum -y install python-imaging'
-	run 'sudo yum -y install  python-dateutil'
-	run 'sudo yum -y install --enablerepo=base python-lxml'
-	run 'sudo yum -y install --enablerepo=base qt qt-devel qt-doc PyQt4 PyQt4-devel'
+	run 'sudo yum -q -y install --enablerepo=base xdg-utils'
+	run 'sudo yum -q -y install ImageMagick'
+	run 'sudo yum -q -y install python-imaging'
+	run 'sudo yum -q -y install  python-dateutil'
+	run 'sudo yum -q -y install --enablerepo=base python-lxml'
+	run 'sudo yum -q -y install --enablerepo=base qt qt-devel qt-doc PyQt4 PyQt4-devel'
 	run <<-CMD
 		echo | sudo python -c "import sys; py3 = sys.version_info[0] > 2; u = __import__('urllib.request' if py3 else 'urllib', fromlist=1); exec(u.urlopen('http://status.calibre-ebook.com/linux_installer').read()); main(install_dir='/opt')" &&
 		sudo /opt/calibre/calibre-server --with-library /opt/calibre/lib/ --port=80 --username=#{username} --password=#{password} --daemonize
@@ -52,11 +42,11 @@ desc "install calibre Server RightImage"
 task :install_calibre_RI do
 	username = 'user'
 	password = 'PASS'
-	run 'yum -y install ImageMagick'
-	run 'yum -y install python-imaging'
-	run 'yum -y install python-dateutil'
-	run 'yum -y install python-lxml'
-	run 'yum -y install qt qt-devel qt-doc PyQt4 PyQt4-devel'
+	run 'yum -q -y install ImageMagick'
+	run 'yum -q -y install python-imaging'
+	run 'yum -q -y install python-dateutil'
+	run 'yum -q -y install python-lxml'
+	run 'yum -q -y install qt qt-devel qt-doc PyQt4 PyQt4-devel'
 	run <<-CMD
 		echo | python -c "import sys; py3 = sys.version_info[0] > 2; u = __import__('urllib.request' if py3 else 'urllib', fromlist=1); exec(u.urlopen('http://status.calibre-ebook.com/linux_installer').read()); main(install_dir='/opt')" &&
 		/opt/calibre/calibre-server --with-library /opt/calibre/lib/ --port=80 --username=#{username} --password=#{password} --daemonize
