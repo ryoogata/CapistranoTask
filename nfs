@@ -1,29 +1,20 @@
 ##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
+## Support.     Amazon Linux AMI 2012.09
+##              AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+
 
 #############################################################################
-## ROLES.
-role :server, ''
+## Settins.
+load 'config.rb'
+load 'default'
 
-set :user, 'ec2-user'
-set :sudo_password, ''
-
-default_run_options[:pty] = true
-
-ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
-ssh_options[:auth_methods] = %w(publickey)
-
-set :use_sudo, true
 
 #############################################################################
 ## TASKS.
 
 desc "install NFS Server"
 task :install_nfsserver do
-	run 'sudo yum -y install nfs-utils'
+	run 'sudo yum -q -y install nfs-utils'
 	run 'sudo mkdir /export'
 	put unindent(<<-'CONF'), '/tmp/exports'
 		/export *(rw,async,no_root_squash)
@@ -35,5 +26,5 @@ end
 
 desc "setup NFS Client"
 task :setup_nfsclient do
-	run 'sudo yum -y install rpcbind nfs-utils'
+	run 'sudo yum -q -y install rpcbind nfs-utils'
 end
