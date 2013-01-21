@@ -9,7 +9,7 @@ load 'config.rb'
 namespace :yum do
 
 # EPEL レポジトリのインストール
-desc "default: Setup CentOS epel Repository ( x86_64 )"
+desc "Setup CentOS epel Repository ( x86_64 )"
 task :setup_epel do
 
 	# パッケージがインストールされていない場合はインストール
@@ -22,7 +22,7 @@ end
 
 
 # RPMForge レポジトリのインストール
-desc "default: Setup CentOS rpmforge Repository ( x86_64 )"
+desc "Setup CentOS rpmforge Repository ( x86_64 )"
 task :setup_rpmforge do
 
 	# パッケージがインストールされていない場合はインストール
@@ -34,11 +34,24 @@ task :setup_rpmforge do
 end
 
 
+# treasure-data.com レポジトリのインストール
+desc "Setup treasuredata Repository"
+task :setup_treasuredata do
+        put unindent(<<-REPO), '/tmp/td.repo'
+		[treasuredata]
+		name=TreasureData
+		baseurl=http://packages.treasure-data.com/redhat/$basearch
+		gpgcheck=0
+        REPO
+	run 'sudo mv /tmp/td.repo /etc/yum.repos.d/'
+end
+
+
 # yum update の実行
 desc "default: execute yum update"
 task :yum_update do
   run <<-CMD
-    sudo yum update -y
+    sudo yum update -q -y
   CMD
 end
 
