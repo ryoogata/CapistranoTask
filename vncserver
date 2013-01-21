@@ -1,16 +1,3 @@
-##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
-
-# ファイルが存在しているか否かの確認
-# ( 存在しているファイルの参照権限がないと動作しない )
-def remote_file_exists?(full_path)
-  'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
-end
-
-
 #############################################################################
 ## Settins:
 load 'config.rb'
@@ -21,15 +8,15 @@ load 'config.rb'
 
 namespace :vncserver do
 
-task :install do
+task :install_vncserver do
 	# 必要なパッケージのインストール
 	packages = %w[
 		tigervnc-server
 	]
-	run "yum -y install #{packages.join(' ')}"
+	run "yum -q -y install #{packages.join(' ')}"
 
 	# Desktop 環境のインストール
-	run 'yum -y groupinstall Desktop'
+	run 'yum -q -y groupinstall Desktop'
 
 	# .vnc Directory の作成
 	run 'mkdir /root/.vnc'
