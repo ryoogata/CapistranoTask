@@ -1,42 +1,37 @@
 ##########################################################################
-## Utilities.
-def unindent(s)
-  return s.gsub(/^\s+/, '')
-  end
+## Support.     
+##             
+
 
 #############################################################################
-## ROLES.
-role :server, 'ec2-204-236-146-97.us-west-1.compute.amazonaws.com'
+## Settins.
+load 'config.rb'
 
-set :user, 'ubuntu'
-#set :user, 'root'
-set :sudo_password, ''
 
-default_run_options[:pty] = true
+#############################################################################
+## Attribute.
 
-ssh_options[:keys] = %w(/Users/ryo/.ssh/default-AWS-US-West.pem)
-ssh_options[:auth_methods] = %w(publickey)
+# Trema のサンプルコードの clone 先
+set :_TREMA_SOURCE_PATH, '/home/ubuntu/trema'
 
-set :use_sudo, true
+# Trema の Source を管理している Git 
+set :_GIT_URL, 'https://github.com/ryoogata/TremaSource.git'
+
 
 #############################################################################
 ## TASKS.
 
 desc "install Trema Amazon Ubuntu Server 11.10 "
 task :install_trema do
-	# Attribute の設定
-	TREMA_SOURCE_PATH = '/home/ubuntu/trema' # Trema のサンプルコードの clone 先 
-	GIT_URL = 'https://github.com/ryoogata/TremaSource.git' # Git の保存先
-
 	# アプリケーションのインストール
 	run 'sudo apt-get update'
 	run 'sudo apt-get -y install git gcc make ruby ruby-dev irb libpcap-dev libsqlite3-dev rubygems'
-	run 'git clone git://github.com/trema/trema.git'
+	run 'git clone --quiet git://github.com/trema/trema.git'
 	run '/home/ubuntu/trema/build.rb'
 	run 'sudo gem install gli --no-ri --no-rdoc'
 
 	# Trema のサンプルコードの clone
 	run <<-CMD
-		cd #{TREMA_SOURCE_PATH} ; git clone #{GIT_URL}
+		cd #{_TREMA_SOURCE_PATH} ; git clone #{_GIT_URL}
 	CMD
 end
