@@ -1,0 +1,3 @@
+CapistranoTask
+==============
+Capistrano のサーバテンプレートです。
