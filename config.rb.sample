@@ -30,4 +30,7 @@ def package_not_install?(package)
   return capture("rpm -ql #{package} || :").include?("is not installed")
 end
 
-
+# Control + C で中断した際にバックトレースの出力させない
+Signal.trap(:INT) do
+  abort "\n[cap] Inturrupted..."
+end
