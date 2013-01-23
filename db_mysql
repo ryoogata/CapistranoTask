@@ -66,19 +66,19 @@ desc "Restore DB"
 task :do_dump_import do
 	run <<-CMD
 		# S3 に保存しているデータの Download
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep -v tgz | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
 		| xargs -i sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-{}.gz /tmp &&
 
 		# 圧縮ファイルの解凍
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep -v tgz | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
 		| xargs -i sudo gunzip /tmp/#{_BACKUPED_DB_PREFIX}-{}.gz &&
 
 		# リストア作業
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep -v tgz | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
 		| xargs -i sudo sh -c "mysql < /tmp/#{_BACKUPED_DB_PREFIX}-{}" &&
 
 		# ファイルの削除
-		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
+		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}- | grep -v tgz | grep gz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_DB_PREFIX}-%%" | sed 's/.gz//' | sort -r | head -n 1 \
 		| xargs -i sudo rm -rf /tmp/#{_BACKUPED_DB_PREFIX}-{}
 	CMD
 end
