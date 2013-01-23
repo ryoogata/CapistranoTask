@@ -128,7 +128,6 @@ task :install_zabbix do
 		innodb_buffer_pool_size=512M
 		innodb_log_file_size=16M
 		innodb_log_files_in_group=2
-		log-bin
 		[mysql]
 		no-auto-rehash
 		# Remove the next comment character if you are not familiar with SQL
