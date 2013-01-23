@@ -16,7 +16,7 @@ load 'monit'
 ## Attribute.
 
 # バックアップファイルを保存する s3 buckets
-set :_S3_BUCKETS_NAME, 'ogata_buckets'
+set :_S3_BUCKETS_NAME, 'ogata_buckets/zabbix'
 
 # バックアップを取得する Directory ( awstool:setup_backupconf )
 set :_BACKUP_DIRECTORY, '/usr/local/etc'
@@ -37,46 +37,22 @@ set :_ZABBIX_DB_USER, 'zabbix'
 # Zabbix 用 DB 名
 set :_DB_NAME, 'zabbix'
 
+# インストールする Zabbix のバージョン
 set :_ZABBIX_VERSION, '2.0.4'
 
 # 下記 Attribute は config.rb に記載している
 # zabbix 用 DB パスワード
 # set :_ZABBIX_DB_PASSWORD
 
+# バックアップからリストアする/しないの選択
+# YES: リストアする, NO: リストアせず、クリーンインストールする
+set :_RESTORE, 'NO'
 
 #############################################################################
 namespace :serverTemplate do
 
-# Zabbix のクリーンインストール
-desc "Build Zabbix Server"
-task :install do
-	sys_ntp.install_ntpd
-        sys_ntp.setup_JST
-        #awstool.setup_s3cmd
-        #awstool.setup_backupconf
-        #awstool.setup_backup_file_and_db_script
-        #awstool.setup_shutdowntime_run_backupscript
-        #awstool.do_tar_schedule_enable
-	monit.install_monit
-	monit.setup_monit_crontab 
-	sys_ntp.setup_monit
-	zabbix.setup_monit_zabbix_server
-	zabbix.setup_monit_zabbix_agentd
-	web_apache.install_apache
-	db_mysql.install_mysql_5_5
-	db_mysql.operationalTask.do_start
-	zabbix.install_zabbix
-	web_apache.operationalTask.do_start
-	zabbix.config_zabbix_server
-	zabbix.config_zabbix_agent
-	web_apache.setup_monit_httpd
-	zabbix.puts_messages
-end
-
-
-# バックアップからのリストア ( Work )
-desc "Build Zabbix Server"
-task :restore do
+# Zabbix のインストール
+task :mixinstall do
 	sys_ntp.install_ntpd
         sys_ntp.setup_JST
         awstool.setup_s3cmd
@@ -95,6 +71,8 @@ task :restore do
 	zabbix.install_zabbix
 	zabbix.do_tar_and_dump_import
 	web_apache.operationalTask.do_start
+	zabbix.config_zabbix_server
+	zabbix.config_zabbix_agent
 	web_apache.setup_monit_httpd
 	zabbix.puts_messages
 end
@@ -232,6 +210,11 @@ end
 
 
 task :config_zabbix_server do
+	# Server Restore の場合は Skip
+	if _RESTORE == 'YES'
+		next
+	end
+
 	# /usr/local/etc/zabbix_server.conf.d を利用するための設定変更
 	run 'sudo sed -i "s/# Include=\/usr\/local\/etc\/zabbix_server.conf.d\//Include=\/usr\/local\/etc\/zabbix_server.conf.d\//" /usr/local/etc/zabbix_server.conf'
 
@@ -271,6 +254,11 @@ end
 
 
 task :config_zabbix_agent do
+	# Server Restore の場合は Skip
+	if _RESTORE == 'YES'
+		next
+	end
+
 	# /usr/local/etc/zabbix_agentd.conf.d を利用するための設定変更
 	run 'sudo sed -i "s/# Include=\/usr\/local\/etc\/zabbix_agentd.conf.d\//Include=\/usr\/local\/etc\/zabbix_agentd.conf.d\//" /usr/local/etc/zabbix_agentd.conf'
 
@@ -332,6 +320,11 @@ end
 
 desc "Restore Data from Backuped file in S3 Buckets"
 task :do_tar_and_dump_import do
+	# Clean Install の場合は Skip
+	if _RESTORE == 'NO'
+		next
+	end
+
         # S3 に保存しているデータを Download して展開
         awstool.do_tar_import
 
