@@ -84,7 +84,7 @@ desc "install fswiki"
 task :install_fswiki do
 	# fswiki インストールの事前準備
 	run <<-CMD
-		sudo yum -y install \
+		sudo yum -q -y install \
 			perl-CGI unzip
 	CMD
 
@@ -92,7 +92,7 @@ task :install_fswiki do
         unless remote_file_exists?("/tmp/wiki3_6_4.zip")
 		run "wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip'"
         end
-        run 'unzip -n -d /tmp /tmp/wiki3_6_4.zip'
+        run 'unzip -q -n -d /tmp /tmp/wiki3_6_4.zip'
 
 	# httpd の設定追加
 	run 'sudo sed -i "/^<Directory \"\/var\/www\/cgi-bin\">/a AddHandler text/css .css " /etc/httpd/conf/httpd.conf' 
@@ -134,12 +134,12 @@ task :install_fswiki do
         run <<-CMD
 		# patch fswiki-patch-20110813 の適用
 		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Ffswiki-patch-20110813.zip' &&
-		unzip -d /tmp /tmp/fswiki-patch-20110813.zip &&
+		unzip -q -d /tmp /tmp/fswiki-patch-20110813.zip &&
 		sudo cp /tmp/fswiki-patch-20110813/lib/Util.pm #{_MAIN_DIRECTORY}/lib &&
 	
 		# patch fswiki-pache-20110823 の適用
 		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=iij&f=%2Ffswiki%2F48737%2Ffswiki-pache-20110823.zip' &&
-		unzip -d /tmp /tmp/fswiki-pache-20110823.zip &&
+		unzip -q -d /tmp /tmp/fswiki-pache-20110823.zip &&
 		sudo cp /tmp/fswiki-pache-20110823/lib/Wiki/InterWiki.pm #{_MAIN_DIRECTORY}/lib/Wiki/
 	CMD
 
