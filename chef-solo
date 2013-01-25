@@ -1,0 +1,62 @@
+##########################################################################
+## Support.     AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+##
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+
+
+#############################################################################
+## Attribute.
+
+# 設定ファイル solo.rb の file_cache_path の値
+set :_FILE_CACHE_PATH, '/tmp'
+
+
+# 設定ファイル solo.rb の cookbook_path の値
+set :_COOKBOOK_PATH, '/root/chef-solo/cookbooks'
+
+
+#############################################################################
+## TASKS.
+
+desc "install chef-solor"
+task :install_chefsolo do
+
+	# chef 設定用 Directory の作成
+	run 'sudo mkdir /etc/chef'
+
+
+	# cookbook を設置する Directory の作成
+	run <<-CMD
+		sudo mkdir -p #{_COOKBOOK_PATH}
+	CMD
+
+	
+	# chef の設定ファイル ( solo.rb ) の設置
+	put unindent(<<-CONF), "/tmp/solo.rb"
+		file_cache_path "#{_FILE_CACHE_PATH}"
+		cookbook_path "#{_COOKBOOK_PATH}"
+	CONF
+	run 'sudo mv /tmp/solo.rb /etc/chef'
+
+
+	# 事前インストール
+        run <<-CMD
+		sudo yum -q -y install \
+			git rubygems ruby ruby-devel ruby-ri ruby-rdoc ruby-shadow \
+			gcc gcc-c++ automake autoconf make \
+			curl dmidecode libxml2-devel libxslt-devel
+        CMD
+
+
+	# chef のインストール
+	run 'sudo gem install chef --no-ri --no-rdoc'
+	
+
+	# github から cookbook の Download
+	run 'cd /tmp && git clone --quiet https://github.com/ryoogata/cookbooks.git'
+	run 'sudo cp -R /tmp/cookbooks /root/chef-solo'
+end
