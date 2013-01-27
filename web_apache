@@ -37,11 +37,11 @@ end # End of namespace :operationalTask do
 desc "Install apache"
 task :install_apache do
 	# 必要なパッケージのインストール
-	packages = %w[
-		httpd httpd-devel
-		gcc make
-	]
-	run "sudo yum -q -y install #{packages.join(' ')}"
+        run <<-CMD
+                sudo yum -q -y install \
+			httpd httpd-devel \
+			gcc make
+        CMD
 	run 'sudo chkconfig httpd on'
 end
 
@@ -71,35 +71,58 @@ desc "Install mod_security"
 task :install_mod_security do
 	# Attribute の設定
 	MODSECURITY_VERSION = '2.7.1'
+	
+	#On - ルールを適用
+	#Off - ルールは適用しない
+	#DetectionOnly - ルールは適用するが、ドロップはしない
+	SECRULEENGINE = 'On'
 
 	# mod_security インストールに必要なパッケージのインストール
-	packages = %w[
+	run <<-CMD
+		sudo yum -q -y install \
 		pcre-devel pcre-tools libxml2-devel libcurl-devel git
-	]
-	run "sudo yum -q -y install #{packages.join(' ')}"
+	CMD
 
-	# mod_security のインストール
+
+	# mod_security2 の Download
 	run "wget -P /tmp https://github.com/downloads/SpiderLabs/ModSecurity/modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
 	run "cd /tmp ; tar xzpf modsecurity-apache_#{MODSECURITY_VERSION}.tar.gz"
+
+
+	# コンパイルとインストール
 	run "cd /tmp/modsecurity-apache_#{MODSECURITY_VERSION} ; ./configure --with-apxs=/usr/sbin/apxs --with-apr=/usr/bin/apr-1-config --with-apu=/usr/bin/apu-1-config --with-pcre=/usr/bin/pcre-config --with-libxml=/usr/bin/xml2-config --disable-pcre-match-limit ; make ; sudo make install"
-	run 'sudo mkdir -p /etc/httpd/modsecurity.d/activated_rules'
-	run 'cd /tmp ; git clone --quiet git://github.com/SpiderLabs/owasp-modsecurity-crs.git'
+
+
+	# modsecurity.conf の準備と設置
         put unindent(<<-'CONF'), '/tmp/modsecurity.conf'
 		LoadModule unique_id_module modules/mod_unique_id.so
 		LoadModule security2_module modules/mod_security2.so
+		Include /etc/httpd/modsecurity.d/modsecurity_crs_10_setup.conf
 		
 		<IfModule mod_security2.c>
 		# This is the ModSecurity Core Rules Set.
 		# Basic configuration goes in here
 		Include modsecurity.d/activated_rules/*.conf
         CONF
-	run 'sed -i "s%#SecDebugLog /opt/modsecurity/var/log/debug.log%SecDebugLog /var/log/debug.log%" /tmp/modsecurity.conf'
-	run 'sed -i "s%#SecDebugLogLevel 3%SecDebugLogLevel 3%" /tmp/modsecurity.conf'
 	run 'echo "</IfModule>" >> /tmp/modsecurity.conf'
+	run "sudo sh -c \"cat /tmp/modsecurity-apache_#{MODSECURITY_VERSION}/modsecurity.conf-recommended >> /tmp/modsecurity.conf\""
+	# modsecurity.conf の設定変更
+	run "sed -i \"s%SecRuleEngine DetectionOnly%SecRuleEngine #{SECRULEENGINE}%\" /tmp/modsecurity.conf"
+	# DebugLogLevel の設定
+	# 通常のログは Apache の error.log に吐かれるため通常は不要
+	#run 'sed -i "s%#SecDebugLogLevel 3%SecDebugLogLevel 3%" /tmp/modsecurity.conf'
+	#run 'sed -i "s%#SecDebugLog /opt/modsecurity/var/log/debug.log%SecDebugLog /var/log/httpd/debug.log%" /tmp/modsecurity.conf'
 	run 'sudo mv /tmp/modsecurity.conf /etc/httpd/conf.d/modsecurity.conf'
-	run "sudo sh -c \"cat /tmp/modsecurity-apache_#{MODSECURITY_VERSION}/modsecurity.conf-recommended >> /etc/httpd/conf.d/modsecurity.conf\""
-	run 'sudo cp /tmp/owasp-modsecurity-crs/modsecurity_crs_10_setup.conf.example /etc/httpd/conf.d/modsecurity_crs_10_setup.conf'
-	run "ls /tmp/owasp-modsecurity-crs/base_rules | sudo xargs -I 'STRINGS' ln -s /tmp/owasp-modsecurity-crs/base_rules/'STRINGS' /etc/httpd/modsecurity.d/activated_rules/'STRINGS'"
+
+
+	# OWASP ModSecurity Core Rule Set の Download と設定ファイルの設置
+	run 'sudo mkdir -p /etc/httpd/modsecurity.d/activated_rules'
+	run 'cd /tmp ; git clone --quiet git://github.com/SpiderLabs/owasp-modsecurity-crs.git'
+	run 'sudo cp /tmp/owasp-modsecurity-crs/modsecurity_crs_10_setup.conf.example /etc/httpd/modsecurity.d/modsecurity_crs_10_setup.conf'
+
+
+	# ルールファイルの設置
+	run "ls /tmp/owasp-modsecurity-crs/base_rules | sudo xargs -i ln -s /tmp/owasp-modsecurity-crs/base_rules/{} /etc/httpd/modsecurity.d/activated_rules/{}"
 end
 
 
