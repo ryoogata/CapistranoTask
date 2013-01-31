@@ -1,8 +1,8 @@
-##########################################################################
-## Support.	AMI: RightImage_CentOS_6.3_x64_v5.8.8 (ami-01496d44)
-
-
 #############################################################################
+# Support.	AMI: RightImage_CentOS_6.3_x64_v5.8.8 (ami-01496d44)
+#		AMI: RightImage_CentOS_6.3_x64_v5.8.8.5_EBS (ami-546b4a11)
+
+
 ## Settins.
 load 'config.rb'
 load 'awstool'
@@ -12,43 +12,31 @@ load 'sys_ntp'
 ## Attribute.
 
 # バックアップを取得する Directory ( awstool:setup_backupconf )
-set :_BACKUP_DIRECTORY, '/var/cache/openvas /var/lib/openvas/users'
+set :_BACKUP_DIRECTORY, '/var/cache/openvas, /var/lib/openvas/users'
 
 # バックアップファイルを保存する s3 buckets
-set :_S3_BUCKETS_NAME, 'ogata_buckets'
+set :_S3_BUCKETS_NAME, 'ogata_buckets/openvas_server'
 
 # バックアップするファイル名の Prefix
 # バックアップファイルは Prefix + date の形式で保存される
 # ( e.g openvasServer201210262316.tgz )
 set :_BACKUPED_FILE_PREFIX, 'openvasServer'
 
+# バックアップからリストアする/しないの選択
+# YES: リストアする, NO: リストアせず、クリーンインストールする
+set :_RESTORE, 'NO'
 
 #############################################################################
 namespace :serverTemplate do
 
-# OpenVAS Server のクリーンインストール
-desc "Build OpenVAS Server"
+desc "Install OpenVAS Server"
 task :install do
 	sys_ntp.setup_JST
 	awstool.setup_s3cmd
-	awstool.setup_backupconf
-	awstool.setup_backup_file_script
-	awstool.setup_shutdowntime_run_backupscript
-	awstool.do_tar_schedule_enable
-	openvas_server.install_openvas_server
-	openvas_server.operationalTask.run_openvas_nvt_sync
-	openvas_server.operationalTask.do_start_openvas_scanner
-end
-
-# バックアップからのリストア
-desc "Restore from S3 Backup OpenVAS Server"
-task :restore do
-	sys_ntp.setup_JST
-	awstool.setup_s3cmd
-	awstool.setup_backupconf
-	awstool.setup_backup_file_script
-	awstool.setup_shutdowntime_run_backupscript
-	awstool.do_tar_schedule_enable
+	#awstool.setup_backupconf
+	#awstool.setup_backup_file_script
+	#awstool.setup_shutdowntime_run_backupscript
+	#awstool.do_tar_schedule_enable
 	openvas_server.install_openvas_server
 	openvas_server.do_tar_restore
 	openvas_server.operationalTask.run_openvas_nvt_sync
@@ -93,19 +81,32 @@ task :install_openvas_server do
 	run '/tmp/atomic'
 
 	# 必要なパッケージのインストール
-	packages = %w[
-		openvas openvas-manager openvas-scanner
-	]
-	run "yum -q -y install #{packages.join(' ')}"
+	run <<-CMD
+		sudo yum -q -y install \
+			openvas openvas-manager openvas-scanner
+	CMD
 
 	# openvassd.conf の設定
 	run 'sed -i "s/log_plugins_name_at_load = no/log_plugins_name_at_load = yes/" /etc/openvas/openvassd.conf' 
 	run 'sed -i "s/log_whole_attack = no/log_whole_attack = yes/" /etc/openvas/openvassd.conf' 
+
+	# cache の展開
+	run 'wget -P /tmp https://s3.amazonaws.com/capistrano_files/openvas_cache.tgz'
+	run 'sudo tar xzpf /tmp/openvas_cache.tgz -C /'
+
+	# 不要なファイルの削除
+	run 'sudo rm -rf /tmp/atomic'
+	run 'sudo rm -rf /tmp/openvas_cache.tgz'
 end
 
 
 desc "Restore Data from Backuped file in S3 Buckets"
 task :do_tar_restore do
+        # Clean Install の場合は Skip
+        if _RESTORE == 'NO'
+                next
+        end
+
 	# S3 に保存しているデータを Download して展開
 	awstool.do_tar_import
 end
