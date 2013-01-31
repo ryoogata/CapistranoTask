@@ -97,12 +97,13 @@ task :install_mod_security do
         put unindent(<<-'CONF'), '/tmp/modsecurity.conf'
 		LoadModule unique_id_module modules/mod_unique_id.so
 		LoadModule security2_module modules/mod_security2.so
-		Include /etc/httpd/modsecurity.d/modsecurity_crs_10_setup.conf
+		Include modsecurity.d/modsecurity_crs_10_setup.conf
 		
 		<IfModule mod_security2.c>
 		# This is the ModSecurity Core Rules Set.
 		# Basic configuration goes in here
 		Include modsecurity.d/activated_rules/*.conf
+		Include modsecurity.d/999_user_exclude.conf
         CONF
 	run 'echo "</IfModule>" >> /tmp/modsecurity.conf'
 	run "sudo sh -c \"cat /tmp/modsecurity-apache_#{MODSECURITY_VERSION}/modsecurity.conf-recommended >> /tmp/modsecurity.conf\""
@@ -119,6 +120,17 @@ task :install_mod_security do
 	run 'sudo mkdir -p /etc/httpd/modsecurity.d/activated_rules'
 	run 'cd /tmp ; git clone --quiet git://github.com/SpiderLabs/owasp-modsecurity-crs.git'
 	run 'sudo cp /tmp/owasp-modsecurity-crs/modsecurity_crs_10_setup.conf.example /etc/httpd/modsecurity.d/modsecurity_crs_10_setup.conf'
+
+
+	# 999_user_exclude.conf の設置
+        put unindent(<<-'CONF'), '/tmp/999_user_exclude.conf'
+		# modsecurity_crs_40_generic_attacks.conf
+		SecRuleRemoveById 960024
+
+		# modsecurity_crs_41_sql_injection_attacks.conf
+		SecRuleRemoveById 981243
+        CONF
+	run 'sudo mv /tmp/999_user_exclude.conf /etc/httpd/modsecurity.d'
 
 
 	# ルールファイルの設置
