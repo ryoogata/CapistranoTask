@@ -1,0 +1,164 @@
+##########################################################################
+## Support.	
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+
+# パスワードの文字列をログに表示しないようにする
+log_formatter(:match => /sudo passwd/, :color => :hide, :priority => 20, :style => :reverse)
+
+
+#############################################################################
+## Attribute.
+
+set(:_USER_NAME) do
+ Capistrano::CLI.ui.ask 'Enter User Name ( Unix Account ): '
+end
+
+set(:_USER_ID) do
+ Capistrano::CLI.ui.ask 'Enter User ID: '
+end
+
+set(:_GROUP_ID) do
+ Capistrano::CLI.ui.ask 'Enter Group ID: '
+end
+
+set(:_FULL_NAME) do
+ Capistrano::CLI.ui.ask 'Enter Full Name: '
+end
+
+set(:_PASSWORD) do
+ Capistrano::CLI.password_prompt 'Enter Password: '
+end
+
+set(:_PASSWORD_AGAIN) do
+ Capistrano::CLI.password_prompt 'Enter Password Again: '
+end
+
+set(:_GROUP_NAME) do
+ Capistrano::CLI.ui.ask 'Enter Group Name: '
+end
+
+#############################################################################
+## TASKS.
+
+namespace :sys_operation do
+
+
+### Operational Task ###
+
+# 新規ユーザの追加
+desc "add new userd"
+task :adduser do
+	# User Name の設定
+        if _USER_NAME != '' 
+		USER_NAME_OPT = "#{_USER_NAME}"		
+	else
+		puts "ユーザ名は必須です"
+		exit
+	end
+	
+
+	# UID の設定
+        if _USER_ID != '' 
+		USER_ID_OPT = "-u #{_USER_ID}"		
+	else
+		USER_ID_OPT = ''
+        end
+
+	# GID の設定
+        if _GROUP_ID != '' 
+		GROUP_ID_OPT = "-g #{_GROUP_ID}"		
+	else
+		GROUP_ID_OPT = ''
+        end
+
+	# Full Name の設定
+        if _FULL_NAME != '' 
+		FULL_NAME_OPT = "-c \"#{_FULL_NAME}\""
+	else
+		FULL_NAME_OPT = ''
+        end
+
+	# adduser コマンドの実行
+	run "sudo adduser #{FULL_NAME_OPT} #{USER_ID_OPT} #{GROUP_ID_OPT} #{USER_NAME_OPT}"
+end
+
+
+# 特定ユーザのパスワードの変更
+desc "change user password"
+task :passwd do
+	# User Name の設定
+        if _USER_NAME != '' 
+		USER_NAME_OPT = "#{_USER_NAME}"		
+	else
+		puts "ユーザ名は必須です"
+		exit
+	end
+
+
+	# パスワードの整合性確認
+	if _PASSWORD == _PASSWORD_AGAIN
+		run <<-CMD
+			echo #{_PASSWORD} | sudo passwd #{USER_NAME_OPT} --stdin
+		CMD
+	else
+		puts "password not match!"
+	end
+end
+
+
+# 特定ユーザを特定のグループへの追加
+desc "add user to group"
+task :add_user_to_group do
+	# User Name の設定
+        if _USER_NAME != '' 
+		USER_NAME_OPT = "#{_USER_NAME}"		
+	else
+		puts "ユーザ名は必須です"
+		exit
+	end
+
+
+	# User Name の設定
+        if _GROUP_NAME != '' 
+		GROUP_NAME_OPT = "#{_GROUP_NAME}"		
+	else
+		puts "ユーザ名は必須です"
+		exit
+	end
+
+	# gpasswd コマンドの実行
+	run "sudo gpasswd -a #{USER_NAME_OPT} #{GROUP_NAME_OPT}"
+
+end
+
+# 特定ユーザを特定のグループから削除
+desc "remove user from group"
+task :remove_user_from_group do
+	# User Name の設定
+        if _USER_NAME != '' 
+		USER_NAME_OPT = "#{_USER_NAME}"		
+	else
+		puts "ユーザ名は必須です"
+		exit
+	end
+
+
+	# User Name の設定
+        if _GROUP_NAME != '' 
+		GROUP_NAME_OPT = "#{_GROUP_NAME}"		
+	else
+		puts "ユーザ名は必須です"
+		exit
+	end
+
+	# gpasswd コマンドの実行
+	run "sudo gpasswd -d #{USER_NAME_OPT} #{GROUP_NAME_OPT}"
+
+end
+
+end	# End of namespace :sys_operation
