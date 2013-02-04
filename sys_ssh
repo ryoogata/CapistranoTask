@@ -1,0 +1,39 @@
+##########################################################################
+## Support.	
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+
+
+#############################################################################
+## TASKS.
+
+namespace :sys_ssh do
+
+
+### Operational Task ###
+
+# FIXME: /etc/init.d/sshd restart で sshd が起動しない
+desc "enable password authentication"
+task :enable_password_auth do
+	run 'sudo sed -i "s/^PasswordAuthentication no/PasswordAuthentication yes/" /etc/ssh/sshd_config'
+	run 'sudo /etc/init.d/sshd restart'
+end
+
+
+# monit による sshd 監視の設定
+task :setup_monit_sshd do
+        run 'sudo mkdir -p /etc/monit.d'
+        put unindent(<<-'CONF'), '/tmp/sshd.monit'
+                check process sshd with pidfile /var/run/sshd.pid
+                start program = "/etc/init.d/sshd start"
+                stop  program = "/etc/init.d/sshd stop"
+                if 5 restarts within 5 cycles then timeout
+        CONF
+        run 'sudo mv /tmp/sshd.monit /etc/monit.d'
+end
+
+end	# End of namespace :sys_ssh
