@@ -8,7 +8,7 @@
 load 'config.rb'
 
 # パスワードの文字列をログに表示しないようにする
-log_formatter(:match => /sudo passwd/, :color => :hide, :priority => 20, :style => :reverse)
+log_formatter(:match => /sudo passwd/, :color => :hide, :priority => 20)
 
 
 #############################################################################
