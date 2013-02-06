@@ -1,0 +1,54 @@
+##########################################################################
+## Support.	AMI: amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+
+
+#############################################################################
+## Attribute.
+
+# 下記 Attribute は config.rb に記載している
+#set :_RACKSPACE_AUTH_KEY
+#set :_RACKSPACE_USERNAME
+
+#############################################################################
+## TASKS.
+
+namespace :rstool do
+
+# rsdns のセットアップ
+desc "Install rsdns & setup"
+task :setup_rsdns do
+	# 事前に必要なパッケージをインストール
+        run <<-CMD
+                sudo yum -q -y install \
+                        rubygems git
+        CMD
+
+       # .rsdns_config の設置
+        put unindent(<<-CONF), "/tmp/.rsdns_config"
+		RSUSER=#{_RACKSPACE_USERNAME}
+		RSAPIKEY=#{_RACKSPACE_AUTH_KEY}
+		RSPATH=/usr/local/bin/
+        CONF
+	run 'sudo mv /tmp/.rsdns_config /root/'
+
+	#rsdns の Download
+	run 'sudo git clone --quiet git://github.com/linickx/rsdns.git /tmp/rsdns'
+
+	#rsdns コマンド群の設置
+	run 'sudo cp -R /tmp/rsdns/* /usr/local/bin/'
+
+	#func.sh の修正版を設置
+	run 'sudo wget -P /tmp https://s3.amazonaws.com/capistrano_files/func.sh'
+	run 'sudo mv -f /tmp/func.sh /usr/local/bin/lib/'
+
+	#不要なファイルの削除
+	run 'sudo rm -rf /tmp/rsdns /usr/local/bin/CONTRIB.md /usr/local/bin/README.md'
+end
+
+end	# End of namespace :rstool
