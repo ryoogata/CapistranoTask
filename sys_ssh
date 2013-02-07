@@ -15,12 +15,12 @@ namespace :sys_ssh do
 
 desc "Start SSH Server"
 task :do_start do
-        run 'sudo /etc/init.d/sshd start'
+        run 'sudo nohup /etc/init.d/sshd start'
 end
 
 desc "Stop SSH Server"
 task :do_stop do
-        run 'sudo /etc/init.d/sshd stop'
+        run 'sudo nohup /etc/init.d/sshd stop'
 end
 
 desc "Restart SSH Server"
