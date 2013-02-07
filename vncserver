@@ -1,4 +1,9 @@
 #############################################################################
+# Support.      AMI: RightImage_CentOS_6.3_x64_v5.8.8 (ami-01496d44)
+#               AMI: RightImage_CentOS_6.3_x64_v5.8.8.5_EBS (ami-546b4a11)
+
+
+#############################################################################
 ## Settins:
 load 'config.rb'
 
@@ -8,12 +13,46 @@ load 'config.rb'
 
 namespace :vncserver do
 
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Start VNC Server"
+task :do_start do
+        run 'sudo nohup /etc/init.d/vncserver start'
+end
+
+desc "Stop VNC Server"
+task :do_stop do
+        run 'sudo nohup /etc/init.d/vncserver stop'
+end
+
+desc "Restart VNC Server"
+task :do_restart do
+        run 'sudo nohup /etc/init.d/vncserver restart'
+end
+
+desc "Set chkconfig on"
+task :chkconfig_on do
+        run 'sudo chkconfig vncserver on'
+end
+
+desc "Set chkconfig off"
+task :chkconfig_off do
+        run 'sudo chkconfig vncserver off'
+end
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
 task :install_vncserver do
 	# 必要なパッケージのインストール
-	packages = %w[
-		tigervnc-server
-	]
-	run "yum -q -y install #{packages.join(' ')}"
+        run <<-CMD
+                sudo yum -q -y install \
+			tigervnc-server
+        CMD
 
 	# Desktop 環境のインストール
 	run 'yum -q -y groupinstall Desktop'
@@ -71,9 +110,8 @@ task :install_vncserver do
 	run 'rm -rf /tmp/vncpasswd'
 	run 'chmod 600 /root/.vnc/passwd'
 
-	# FIXME: 起動しない
-	#run '/etc/init.d/vncserver start'
-	#run '/etc/init.d/vncserver restart'
+	# VNC Server の起動
+	vncserver.operationalTask.do_start
 end
 
 end # End of namespace :vncserver
