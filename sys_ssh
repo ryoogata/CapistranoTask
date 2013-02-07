@@ -13,14 +13,28 @@ load 'config.rb'
 
 namespace :sys_ssh do
 
+desc "Start SSH Server"
+task :do_start do
+        run 'sudo /etc/init.d/sshd start'
+end
 
-### Operational Task ###
+desc "Stop SSH Server"
+task :do_stop do
+        run 'sudo /etc/init.d/sshd stop'
+end
 
-# FIXME: /etc/init.d/sshd restart で sshd が起動しない
+desc "Restart SSH Server"
+task :do_restart do
+        run 'sudo nohup /etc/init.d/sshd restart'
+end
+
+
 desc "enable password authentication"
 task :enable_password_auth do
 	run 'sudo sed -i "s/^PasswordAuthentication no/PasswordAuthentication yes/" /etc/ssh/sshd_config'
-	run 'sudo /etc/init.d/sshd restart'
+
+	# sshd の再起動
+	sys_ssh.do_restart
 end
 
 
