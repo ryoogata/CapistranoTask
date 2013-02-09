@@ -23,6 +23,26 @@ set :_ZABBIX_SERVER, '10.171.111.197'
 
 namespace :zabbix_agentd do
 
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Start Zabbix Agent"
+task :do_start do
+        run 'sudo nohup /etc/init.d/zabbix_agentd start'
+end
+
+desc "Stop Zabbix Agent"
+task :do_stop do
+        run 'sudo nohup /etc/init.d/zabbix_agentd stop'
+end
+
+desc "Restart Zabbix Agent"
+task :do_restart do
+        run 'sudo nohup /etc/init.d/zabbix_agentd restart'
+end
+
+end # End of :operationalTask
 
 ### Boot Task ###
 
