@@ -77,7 +77,7 @@ task :do_tar_import do
                 | xargs -i sudo s3cmd get s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}-{}.tgz /tmp &&
                 # リストア作業
 		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}- | grep tgz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}-%%" | sed 's/.tgz//' | sort -r | head -n 1 \
-                | xargs -i sudo tar xzpvf /tmp/#{_BACKUPED_FILE_PREFIX}-{}.tgz -C / &&
+                | xargs -i sudo tar xzpf /tmp/#{_BACKUPED_FILE_PREFIX}-{}.tgz -C / &&
                 # ファイルの削除
 		sudo s3cmd ls s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}- | grep tgz | awk '{print $4}' | sed "s%s3://#{_S3_BUCKETS_NAME}/#{_BACKUPED_FILE_PREFIX}-%%" | sed 's/.tgz//' | sort -r | head -n 1 \
                 | xargs -i sudo rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}-{}.tgz
@@ -115,16 +115,16 @@ desc "Install s3fs & setup"
 task :setup_s3fs do
         # 事前に必要なパッケージをインストール
 	run <<-CMD
-	sudo yum -y install \
-		fuse fuse-devel \
-		gcc-c++ make \
-		curl-devel libxml2-devel openssl-devel \
-		git
+		sudo yum -q -y install \
+			fuse fuse-devel \
+			gcc-c++ make \
+			curl-devel libxml2-devel openssl-devel \
+			git
 	CMD
 
 	#s3fs の Download とインストール
         run <<-CMD
-		git clone git://github.com/memorycraft/s3fs-cloudpack.git /tmp/s3fs-cloudpack &&
+		git clone --quiet git://github.com/memorycraft/s3fs-cloudpack.git /tmp/s3fs-cloudpack &&
 		cd /tmp/s3fs-cloudpack ; sh ./configure ; make ; sudo make install
 	CMD
 
@@ -145,15 +145,15 @@ desc "Install s3cmd & setup"
 task :setup_s3cmd do
 	# python-magic のインストール
 	run <<-CMD
-		sudo yum -y install \
-			python-magic unzip
+		sudo yum -q -y install \
+			python-magic unzip wget
 	CMD
 
 	# s3cmd の Download とインストール
 	unless remote_file_exists?("/tmp/s3cmd-1.1.0-beta3.zip")
 		#run "wget -P /tmp 'http://downloads.sourceforge.net/project/s3tools/s3cmd/1.1.0-beta3/s3cmd-1.1.0-beta3.zip?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fs3tools%2Ffiles%2Fs3cmd%2F1.1.0-beta3%2F&ts=1351065122&use_mirror=jaist'"
 		run "wget -P /tmp 'https://s3.amazonaws.com/capistrano_files/s3cmd-1.1.0-beta3.zip'"
-		run 'unzip -n -d /tmp /tmp/s3cmd-1.1.0-beta3.zip'
+		run 'unzip -q -n -d /tmp /tmp/s3cmd-1.1.0-beta3.zip'
 		run 'cd /tmp/s3cmd-1.1.0-beta3 ; sudo python setup.py install'
 	end
 
@@ -211,6 +211,29 @@ task :setup_s3cmd do
 	# ファイルの削除
 	run 'sudo rm -rf /tmp/s3cmd-1.1.0-beta3.zip'
 	run 'sudo rm -rf /tmp/s3cmd-1.1.0-beta3'
+end
+
+desc "Setup Elastic-Mapreduce Command Line Interface"
+task :setup_mapreduce do
+	#run "wget -P /tmp 'http://elasticmapreduce.s3.amazonaws.com/elastic-mapreduce-ruby.zip'"
+	run 'unzip -q -n -d /tmp /tmp/elastic-mapreduce-ruby.zip'
+
+	# fswiki インストールの事前準備
+	run <<-CMD
+		sudo yum -q -y install \
+			ruby
+	CMD
+
+	put unindent(<<-CREDENTIALS), '/tmp/credentials.json'
+		{
+		"access_id":"_ACCESS_KEY",
+		"private_key":"_SECRET_KEY",
+		"keypair":"default_us_west",
+		"key-pair-file":"/root/.ssh/default_us_west",
+		"log_uri":"s3://yggdrasillnetwork-hive-log/",
+		"region":"us-west-1"
+}
+	CREDENTIALS
 end
 
 
