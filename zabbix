@@ -16,7 +16,7 @@ load 'monit'
 ## Attribute.
 
 # バックアップファイルを保存する s3 buckets
-set :_S3_BUCKETS_NAME, 'ogata_buckets/zabbix'
+set :_S3_BUCKETS_NAME, 'ogata_buckets/zabbixtest'
 
 # バックアップを取得する Directory ( awstool:setup_backupconf )
 set :_BACKUP_DIRECTORY, '/usr/local/etc'
@@ -52,7 +52,7 @@ set :_RESTORE, 'NO'
 namespace :serverTemplate do
 
 # Zabbix のインストール
-task :mixinstall do
+task :install do
 	sys_ntp.install_ntpd
         sys_ntp.setup_JST
         awstool.setup_s3cmd
@@ -95,8 +95,19 @@ task :do_tar_and_dump_export do
 	db_mysql.operationalTask.do_dump_export
 end
 
-task :start_server do
-	run 'sudo /usr/local/sbin/zabbix_server'
+desc "Start Zabbix Server"
+task :do_start do
+        run 'sudo nohup /etc/init.d/zabbix_server start'
+end
+
+desc "Stop Zabbix Server"
+task :do_stop do
+        run 'sudo nohup /etc/init.d/zabbix_server stop'
+end
+
+desc "Restart Zabbix Server"
+task :do_restart do
+        run 'sudo nohup /etc/init.d/zabbix_server restart'
 end
 
 end # End of :operationalTask
