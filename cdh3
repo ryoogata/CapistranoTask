@@ -1,0 +1,281 @@
+#############################################################################
+## Support.	amzn-ami-pv-2012.09.0.x86_64-ebs (ami-1bf9de5e)	[m1.small 以上]
+## 		
+
+
+## Settins.
+load 'config.rb'
+load 'awstool'
+load 'sys_ntp'
+
+
+#############################################################################
+## Attribute.
+
+
+#############################################################################
+namespace :serverTemplate do
+
+# CDH3 ( StandAlone ) インストール
+desc "Build CDH3 Server"
+task :install_standalone do
+	sys_ntp.setup_JST
+	awstool.setup_s3cmd
+	cdh3.install_cdh3_standalone
+end
+
+
+# CDH3 ( 擬似分散モード ) インストール
+desc "Build CDH3 Server"
+task :install_pseudo do
+	sys_ntp.setup_JST
+	awstool.setup_s3cmd
+	cdh3.install_cdh3_pseudo
+end
+
+end # End of namespace :serverTemplate
+
+
+#############################################################################
+## TASKS.
+
+namespace :cdh3 do
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+## ネームノード
+desc "Start Namenode Server"
+task :do_start_namenode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-namenode start'
+end
+
+desc "Stop Namenode Server"
+task :do_stop_namenode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-namenode stop'
+end
+
+desc "Restart Namenode Server"
+task :do_restart_namenode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-namenode restart'
+end
+
+## データノード
+desc "Start Datanode Server"
+task :do_start_datanode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-datanode start'
+end
+
+desc "Stop Datanode Server"
+task :do_stop_datanode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-datanode stop'
+end
+
+desc "Restart Datanode Server"
+task :do_restart_datanode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-datanode restart'
+end
+
+# セカンダリネームノード
+desc "Start SecondaryNamenode Server"
+task :do_start_secondarynamenode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-secondarynamenode start'
+end
+
+desc "Stop SecondaryNamenode Server"
+task :do_stop_secondarynamenode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-secondarynamenode stop'
+end
+
+desc "Restart SecondaryNamenode Server"
+task :do_restart_secondarynamenode do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-secondarynamenode restart'
+end
+
+# タスクトラッカー
+desc "Start Tasktracker Server"
+task :do_start_tasktracker do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-tasktracker start'
+end
+
+desc "Stop Tasktracker Server"
+task :do_stop_tasktracker do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-tasktracker stop'
+end
+
+desc "Restart Tasktracker Server"
+task :do_restart_tasktracker do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-tasktracker restart'
+end
+
+# ジョブトラッカー
+desc "Start Jobtracker Server"
+task :do_start_jobtracker do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-jobtracker start'
+end
+
+desc "Stop Jobtracker Server"
+task :do_stop_jobtracker do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-jobtracker stop'
+end
+
+desc "Restart Jobtracker Server"
+task :do_restart_jobtracker do
+        run 'sudo nohup /etc/init.d/hadoop-0.20-jobtracker restart'
+end
+
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+# スタンドアロンモードで Setup
+task :install_cdh3_standalone do
+	# パスワードなしで sudo が実行できるように設定
+	run 'sudo sed -i "s/# %wheel/ %wheel/" /etc/sudoers'
+
+	# JDK の Download
+	run 'cd /tmp ; sudo s3cmd get s3://capistrano_files/jdk-6u39-linux-x64-rpm.bin'
+	run 'sudo chmod a+x /tmp/jdk-6u39-linux-x64-rpm.bin'
+	
+	# JDK のインストール
+	run 'echo | sudo /tmp/jdk-6u39-linux-x64-rpm.bin'
+
+	# Java コマンドの切り替え
+	run 'sudo alternatives --install /usr/bin/java java /usr/java/jdk1.6.0_39/bin/java 20000'
+
+	# Host 共通の環境変数を設定
+	put unindent(<<-'JAVAENV'), '/tmp/java.sh'
+		export JAVA_HOME=/usr/java/jdk1.6.0_39
+		export PATH=$JAVA_HOME/bin:$PATH
+	JAVAENV
+	run 'sudo chmod 755 /tmp/java.sh'
+	run 'sudo mv /tmp/java.sh /etc/profile.d'
+
+	# CDH3 の Repository の取得とインストール
+	run 'wget -P /tmp http://archive.cloudera.com/redhat/6/x86_64/cdh/cdh3-repository-1.0-1.noarch.rpm'
+	run 'sudo yum -y --nogpgcheck localinstall /tmp/cdh3-repository-1.0-1.noarch.rpm'
+
+        # Hadoop 本体のインストール
+	run <<-CMD
+		sudo yum -q -y install \
+			hadoop-0.20
+	CMD
+
+	# 作業 Directory の作成
+	run 'mkdir -p /home/ec2-user/hadoop/input'
+
+	# サンプルデータの取得 ( 吾輩は猫である )
+	run 'wget -P /tmp http://www.aozora.gr.jp/cards/000148/files/789_ruby_5639.zip'
+	run 'unzip -d /tmp /tmp/789_ruby_5639.zip'
+	run 'iconv -f=sjis -t=utf8 < /tmp/wagahaiwa_nekodearu.txt > /home/ec2-user/hadoop/input/wagahaiwa_nekodearu.txt'
+
+	#  不要なファイルの削除
+	run 'rm -rf /home/ec2-user/sun*'
+	run 'rm -rf /home/ec2-user/jdk*'
+end
+
+
+# 擬似分散モードで MRv1 を Setup
+task :install_cdh3_pseudo do
+	# パスワードなしで sudo が実行できるように設定
+	run 'sudo sed -i "s/# %wheel/ %wheel/" /etc/sudoers'
+
+	# JDK の Download
+	run 'cd /tmp ; sudo s3cmd get s3://capistrano_files/jdk-6u39-linux-x64-rpm.bin'
+	run 'sudo chmod a+x /tmp/jdk-6u39-linux-x64-rpm.bin'
+	
+	# JDK のインストール
+	run 'echo | sudo /tmp/jdk-6u39-linux-x64-rpm.bin'
+
+	# Java コマンドの切り替え
+	run 'sudo alternatives --install /usr/bin/java java /usr/java/jdk1.6.0_39/bin/java 20000'
+
+	# Host 共通の環境変数を設定
+	put unindent(<<-'JAVAENV'), '/tmp/java.sh'
+		export JAVA_HOME=/usr/java/jdk1.6.0_39
+		export PATH=$JAVA_HOME/bin:$PATH
+	JAVAENV
+	run 'sudo chmod 755 /tmp/java.sh'
+	run 'sudo mv /tmp/java.sh /etc/profile.d'
+
+	# CDH3 の Repository の取得とインストール
+	run 'wget -P /tmp http://archive.cloudera.com/redhat/6/x86_64/cdh/cdh3-repository-1.0-1.noarch.rpm'
+	run 'sudo yum -y --nogpgcheck localinstall /tmp/cdh3-repository-1.0-1.noarch.rpm'
+
+        # Hadoop 本体のインストール
+	run <<-CMD
+		sudo yum -q -y install \
+			hadoop-0.20
+	CMD
+
+	# 作業 Directory の作成
+	run 'mkdir -p /home/ec2-user/hadoop/input'
+
+	# サンプルデータの取得 ( 吾輩は猫である )
+	run 'wget -P /tmp http://www.aozora.gr.jp/cards/000148/files/789_ruby_5639.zip'
+	run 'unzip -d /tmp /tmp/789_ruby_5639.zip'
+	run 'iconv -f=sjis -t=utf8 < /tmp/wagahaiwa_nekodearu.txt > /home/ec2-user/hadoop/input/wagahaiwa_nekodearu.txt'
+
+        # 疑似分散モード利用の為のパッケージのインストール  
+	run <<-CMD
+		sudo yum -q -y install \
+			hadoop-0.20-conf-pseudo
+	CMD
+
+	# ネームノードを起動
+	cdh3.operationalTask.do_start_namenode
+
+	# データノードの起動
+	cdh3.operationalTask.do_start_datanode
+
+	# セカンダリネームノードの起動
+	cdh3.operationalTask.do_start_secondarynamenode
+
+	# タスクトラッカーの起動
+	cdh3.operationalTask.do_start_tasktracker
+
+	# ジョブトラッカーの起動
+	cdh3.operationalTask.do_start_jobtracker
+
+	#  不要なファイルの削除
+	run 'rm -rf /home/ec2-user/sun*'
+	run 'rm -rf /home/ec2-user/jdk*'
+end
+
+
+task :install_hive do
+	# Hive のインストール
+	run <<-CMD
+		sudo yum -q -y install \
+			hadoop-hive
+	CMD
+
+	# 一般ユーザが Hive を利用できるようパーミッションの変更	
+	run 'sudo chmod o+w /var/lib/hive/metastore'
+
+	# ec2-user 用の HDFS ホームディレクトリの作成
+	run 'sudo -u hdfs hadoop fs -mkdir /user/ec2-user'
+	run 'sudo -u hdfs hadoop fs -chown ec2-user /user/ec2-user'
+
+	# Hive 用のディレクトリの作成
+	run 'sudo -u hdfs hadoop fs -mkdir /user/ec2-user/warehouse'
+	run 'sudo -u hdfs hadoop fs -chown -R ec2-user /user/ec2-user'
+	run 'hadoop fs -chmod a+w /user/ec2-user/warehouse'
+	
+	# /tmp ディレクトリの作成
+	run 'sudo -u hdfs hadoop fs -mkdir /tmp'
+	run 'sudo -u hdfs hadoop fs -chown ec2-user /tmp'
+	run 'hadoop fs -chmod a+w /tmp'
+end
+
+
+task :download_gihyo_sample do
+	# 技評 HP からサンプルデータの Download と展開
+	run 'wget -P /tmp http://image.gihyo.co.jp/assets/files/book/2012/978-4-7741-5389-6/download/sample.zip'
+	run 'unzip -q -n -d /tmp /tmp/sample.zip'
+end
+
+end	# End of namespace :cdh3
