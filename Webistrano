@@ -1,0 +1,142 @@
+##########################################################################
+## Support.	
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+load 'awstool'
+load 'sys_ntp'
+load 'db_mysql'
+
+
+#############################################################################
+## Attribute.
+
+# バックアップファイルを保存する S3 buckets
+set :_S3_BUCKETS_NAME, 'ogata_buckets/webistrano'
+
+# バックアップする DB の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g webistrano_database201210262316.tgz )
+set :_BACKUPED_DB_PREFIX, 'webistrano_database'
+
+# Webistrano 用 DB 名
+set :_DB_NAME, 'webistrano_production'
+
+# バックアップからリストアする/しないの選択
+# YES: リストアする, NO: リストアせず、クリーンインストールする
+set :_RESTORE, 'NO'
+
+
+#############################################################################
+namespace :serverTemplate do
+
+# Webistrano のインストール
+desc "Build Webistrano Server"
+task :install do
+        sys_ntp.setup_JST
+        awstool.setup_s3cmd
+        awstool.setup_backup_db_script
+        awstool.setup_shutdowntime_run_backupscript
+        db_mysql.install_mysql_5_5
+        db_mysql.operationalTask.do_start
+        db_mysql.operationalTask.create_db
+	webistrano.setup_webistrano
+	webistrano.do_dump_import
+end
+
+end # End of namespace :serverTemplate
+
+
+#############################################################################
+## TASKS.
+
+namespace :Webistrano do
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+desc "Setup Webistrano"
+task :setup_webistrano do
+        # 必要なパッケージのインストール
+        run <<-CMD
+                sudo yum -q -y install \
+			git make gcc sqlite-devel \
+			ruby rubygems ruby-devel
+	CMD
+
+
+	# Webistrano の Source の clone
+	run 'sudo git clone https://github.com/peritor/webistrano.git /usr/local/src//webistrano'
+
+
+	# 設定ファイルの準備
+	run 'sudo cp /usr/local/src/webistrano/config/webistrano_config.rb.sample /usr/local/src/webistrano/config/webistrano_config.rb'
+	run 'sudo cp /usr/local/src/webistrano/config/database.yml.sample /usr/local/src/webistrano/config/database.yml'
+
+
+	# database.yml の修正
+	run 'sudo sed -i "s%\/tmp\/mysql.sock%\/var\/lib\/mysql\/mysql.sock%" /usr/local/src/webistrano/config/database.yml'
+
+
+	# Gemfile の準備
+	run 'sudo mv /usr/local/src/webistrano/Gemfile /usr/local/src/webistrano/Gemfile.back'
+	put unindent(<<-'CONF'), '/tmp/Gemfile'
+		source "http://rubygems.org"
+		gem 'bundler'
+		gem "rails", "2.3.11"
+		gem "mysql"
+		gem "erubis"
+		gem "rake", "0.8.7"
+		gem "syntax", "1.0.0"
+		gem "capistrano", "2.6.0"
+		gem "open4", "0.9.3"
+		gem "exception_notification", "2.3.3.0"
+		group :test do
+		  gem "mocha", "0.9.8"
+		end
+        CONF
+	run 'sudo mv /tmp/Gemfile /usr/local/src/webistrano'
+
+
+	# bundle のインストール
+	run 'sudo gem install bundle --no-ri --no-rdoc'
+
+
+	# 必要な gem をインストール
+	run 'cd /usr/local/src/webistrano ; sudo bundle install --path vendor/bundle'
+
+
+	# バグの修正
+	run 'sudo sed -i "s%@deployment.task%!@deployment[:task].nil?%" /usr/local/src/webistrano/lib/webistrano/deployer.rb'
+
+
+	# DB のマイグレーション
+	run 'cd /usr/local/src/webistrano ; sudo RAILS_ENV=production bundle exec rake db:migrate'
+
+
+	# webistrano 起動
+	run 'cd /usr/local/src/webistrano ; sudo ruby script/server -d -p 3000 -e production'
+end
+
+
+desc "Restore Data from Backuped file in S3 Buckets"
+task :do_dump_import do
+        # Clean Install の場合は Skip
+        if _RESTORE == 'NO'
+                next
+        end
+
+        # DB のリストア
+        db_mysql.operationalTask.do_dump_import
+end
+
+end	# End of namespace :Webistrano
