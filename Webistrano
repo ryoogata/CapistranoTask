@@ -27,7 +27,7 @@ set :_DB_NAME, 'webistrano_production'
 
 # バックアップからリストアする/しないの選択
 # YES: リストアする, NO: リストアせず、クリーンインストールする
-set :_RESTORE, 'NO'
+set :_RESTORE, 'YES'
 
 
 #############################################################################
@@ -53,7 +53,7 @@ end # End of namespace :serverTemplate
 #############################################################################
 ## TASKS.
 
-namespace :Webistrano do
+namespace :webistrano do
 
 ### Operational Task ###
 
@@ -139,4 +139,4 @@ task :do_dump_import do
         db_mysql.operationalTask.do_dump_import
 end
 
-end	# End of namespace :Webistrano
+end	# End of namespace :webistrano
