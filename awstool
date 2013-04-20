@@ -343,7 +343,7 @@ task :setup_backup_file_and_db_script do
                 	tar czpf /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz --files-from /root/backup.conf
 		fi
                 s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz s3://#{_S3_BUCKETS_NAME}/
-                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}$FILENAME.tgz
+                rm -rf /tmp/#{_BACKUPED_FILE_PREFIX}-$FILENAME.tgz
 
                 mysqldump --default-character-set=utf8 --opt --flush-logs --single-transaction --databases mysql #{_DB_NAME} | gzip -c > /tmp/#{_BACKUPED_DB_PREFIX}-$FILENAME.gz &&
                 s3cmd -c /root/.s3cfg put /tmp/#{_BACKUPED_DB_PREFIX}-$FILENAME.gz s3://#{_S3_BUCKETS_NAME}/ &&
