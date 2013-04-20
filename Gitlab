@@ -1,0 +1,305 @@
+##########################################################################
+## Support.	
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+load 'yum'
+load 'db_mysql'
+load 'web_apache'
+load 'sys_firewall'
+load 'selinux'
+load 'sys_ntp'
+load 'awstool'
+
+
+#############################################################################
+## Attribute.
+
+# バックアップファイルを保存する S3 buckets
+set :_S3_BUCKETS_NAME, 'ogata_buckets/gitlab'
+
+# バックアップする DB の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g gitlab_database-201210262316.tgz )
+set :_BACKUPED_DB_PREFIX, 'gitlab_database'
+
+# バックアップを取得する Directory ( awstool:setup_backupconf )
+set :_BACKUP_DIRECTORY, '/home/git/repositories,/home/git/.ssh/authorized_keys'
+
+# バックアップするファイル名の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g gitlab_repositories-201210262316.tgz )
+set :_BACKUPED_FILE_PREFIX, 'gitlab_repositories'
+
+# Ruby の Version ( Source ) の選択
+set :_RUBY_SOURCE, 'ruby-1.9.3-p327.zip'
+
+# GitLab 用 DB 名
+set :_DB_NAME, 'gitlabhq_production'
+
+# git の 設定
+set :_GIT_NAME, 'GitLab'
+set :_GIT_EMAIL, 'gitlab@localhost'
+
+# GitLab の Host 名
+set :_HOST_NAME, ''
+
+# バックアップからリストアする/しないの選択
+# YES: リストアする, NO: リストアせず、クリーンインストールする
+set :_RESTORE, 'NO'
+
+#############################################################################
+namespace :serverTemplate do
+
+# GitLab のインストール
+desc "Build GitLab Server"
+task :install do
+	sys_ntp.setup_JST
+        awstool.setup_s3cmd
+        awstool.setup_backupconf
+        awstool.setup_backup_file_and_db_script
+	sys_firewall.operationalTask.do_stop
+	selinux.selinux_disable
+	yum.setup_epel
+	yum.setup_rpmforge
+	yum.setup_remi
+	db_mysql.install_mysql_5_5
+	db_mysql.operationalTask.do_start
+	web_apache.install_apache
+	gitlab.install_gitlab
+	gitlab.operationalTask.do_start
+	gitlab.do_dump_and_file_import
+	web_apache.operationalTask.do_start
+end
+
+end # End of namespace :serverTemplate
+
+
+#############################################################################
+## TASKS.
+
+namespace :gitlab do
+
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Start Gitlab Server"
+task :do_start do
+        run 'sudo nohup service gitlab start'
+end
+
+
+desc "Stop Gitlab Server"
+task :do_stop do
+        run 'sudo nohup service gitlab stop'
+end
+
+
+desc "Restart Gitlab Server"
+task :do_restart do
+        run 'sudo nohup service gitlab restart'
+end
+
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+desc "install GitLab"
+task :install_gitlab do
+        RUBY_DIR = _RUBY_SOURCE.slice(0..14)
+
+	## システム標準の ruby を削除
+	run 'sudo yum -y erase ruby'
+
+
+	## 必要なパッケージのインストール
+	run <<-CMD
+		sudo yum -q -y install \
+			gcc make git wget unzip rpm-build  gcc-c++ \
+			libcurl-devel gdbm-devel libyaml-devel openssl-devel zlib-devel libyaml-devel libicu-devel python-devel libxml2-devel libxslt-devel \
+			python-pip redis postfix libyaml gettext \
+			perl-Time-HiRes
+	CMD
+	run '/usr/bin/pip-python install pygments'
+
+
+	## Redis サービスの起動
+	run 'sudo nohup /etc/init.d/redis start'
+
+
+	## ruby のコンパイルとインストール
+
+	# ruby の Source を取得
+	run "wget -P /tmp ftp://ftp.ruby-lang.org/pub/ruby/1.9/#{_RUBY_SOURCE}"
+
+	# ruby Source の展開
+	run "unzip -q -n -d /tmp /tmp/#{_RUBY_SOURCE}"
+
+	# コンパイルとインストール
+	run <<-CMD
+		cd /tmp/#{RUBY_DIR} &&
+		./configure --prefix=/usr &&
+		make &&
+		make install
+	CMD
+
+	# 不要なファイルの削除
+	run "sudo rm -rf /tmp/#{_RUBY_SOURCE}"
+	run "sudo rm -rf /tmp/#{RUBY_DIR}"
+
+
+	## Bundler のインストール
+	run 'sudo /usr/bin/gem install bundler --no-ri --no-rdoc'
+
+
+	## 必要なユーザーとグループの追加
+	run <<-CMD
+		sudo useradd git &&
+		sudo chmod 755 /home/git &&
+		sudo usermod -G git apache
+	CMD
+
+
+	## gitの設定を初期化
+	put unindent(<<-CONF), "/tmp/gitconfig"
+		[user]
+        	name = #{_GIT_NAME}
+        	email = #{_GIT_EMAIL}
+	CONF
+	run 'sudo mv /tmp/gitconfig /home/git/.gitconfig'
+	run 'sudo chown git:git /home/git/.gitconfig'
+
+
+	## gitlab-shell の Setup
+
+	# gitlab-shell の clone
+	run 'cd /home/git ; sudo -u git git clone https://github.com/gitlabhq/gitlab-shell.git'
+
+	# switch to right version for v5.0
+	run 'cd /home/git/gitlab-shell ; sudo -u git git checkout v1.1.0'
+	run 'cd /home/git/gitlab-shell ; sudo -u git cp config.yml.example config.yml'
+
+	# config.yml の編集
+	run "sudo sed -i \"s/localhost/#{_HOST_NAME}/\" /home/git/gitlab-shell/config.yml"
+	
+	# gitlab_config.rb の編集
+	run "sudo sed -i \"s/localhost/#{_HOST_NAME}/\" /home/git/gitlab-shell/lib/gitlab_config.rb"
+
+	# Do setup
+	run 'sudo -u git -i /home/git/gitlab-shell/bin/install'
+
+
+	# DB の Setup
+	run <<-CMD
+		# ユーザの追加
+		sudo echo "CREATE USER 'gitlab'@'localhost' IDENTIFIED BY 'bbtower'" | mysql -u root &&
+
+		# DB の作成
+		sudo echo  'CREATE DATABASE IF NOT EXISTS `gitlabhq_production` DEFAULT CHARACTER SET `utf8` COLLATE `utf8_unicode_ci`' | mysql -u root &&
+	
+		#
+		sudo echo 'GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `gitlabhq_production`.* TO \'gitlab\'@\'localhost\'' | mysql -u root
+	CMD
+
+
+	## gitlab の Setup
+
+	# gitlab の clone
+	run 'cd /home/git/ ; sudo -u git git clone https://github.com/gitlabhq/gitlabhq.git gitlab'
+
+	# Checkout to stable release
+	run 'cd /home/git/gitlab ; sudo -u git git checkout 5-0-stable'
+
+	# 設定ファイルのコピーと編集
+	run 'cd /home/git/gitlab ; cp config/gitlab.yml.example config/gitlab.yml'
+	run "sudo sed -i \"s/host: localhost/host: #{_HOST_NAME}/\" /home/git/gitlab/config/gitlab.yml"
+	
+	# Gitlab が log/ と tmp/ Directory の書き込み権限を付与
+	run 'cd /home/git/gitlab ; sudo chown -R git log/'
+	run 'cd /home/git/gitlab ; sudo chown -R git tmp/'
+	run 'cd /home/git/gitlab ; sudo chmod -R u+rwX  log/'
+	run 'cd /home/git/gitlab ; sudo chmod -R u+rwX  tmp/'
+
+	# satellites 用の Directory の作成
+	run 'sudo -u git mkdir /home/git/gitlab-satellites'
+
+	# pid 用 Directory の作成と権限の編集
+	run 'cd /home/git/gitlab ; sudo -u git mkdir tmp/pids/'
+	run 'cd /home/git/gitlab ; sudo -u git chmod -R u+rwX  tmp/pids/'
+
+	# Unicorn 設定のコピー
+	run 'cd /home/git/gitlab ; sudo -u git cp config/unicorn.rb.example config/unicorn.rb'
+
+	# GitLab DB の設定
+	run 'cd /home/git/gitlab ; sudo -u git cp config/database.yml.mysql config/database.yml'
+
+	# charlock_holmes のインストール
+	run "gem install charlock_holmes --version '0.6.9' --no-ri --no-rdoc"
+
+	# MySQL 用の設定
+	run 'cd /home/git/gitlab ; sudo -u git /usr/bin/bundle install --deployment --without development test postgres'
+	run 'sed -i "s/\"secure password\"//" /home/git/gitlab/config/database.yml'
+
+	# DB のセットアップの実行
+	run 'cd /home/git/gitlab ; yes yes | sudo -u git /usr/bin/bundle exec rake gitlab:setup RAILS_ENV=production'
+
+
+	# 起動 Script の準備
+	run 'sudo curl --output /etc/init.d/gitlab https://raw.github.com/gitlabhq/gitlab-recipes/5-0-stable/init.d/gitlab-centos ; sudo chmod +x /etc/init.d/gitlab'
+	run 'sudo sed -i "s/NAME=gitlab/NAME=git/" /etc/init.d/gitlab'
+
+
+	## passenger のインストール
+	run 'sudo gem install passenger --no-ri --no-rdoc'
+
+	
+	## passenger の apache2 module のインストール
+	run 'yes | sudo passenger-install-apache2-module'
+	
+
+	## apache 用 gitlab 設定ファイルの追加
+        put unindent(<<-CONF), "/tmp/gitlab.conf"
+		LoadModule passenger_module /usr/lib/ruby/gems/1.9.1/gems/passenger-3.0.19/ext/apache2/mod_passenger.so
+		PassengerRoot /usr/lib/ruby/gems/1.9.1/gems/passenger-3.0.19
+		PassengerRuby /usr/bin/ruby
+		<virtualhost *:80>
+		ServerName #{_HOST_NAME}
+		# !!! Be sure to point DocumentRoot to ‘public’!
+ 		DocumentRoot /home/git/gitlab/public
+		<directory /home/git/gitlab/public>
+		# This relaxes Apache security settings.
+		AllowOverride all
+		# MultiViews must be turned off.
+		Options -MultiViews
+		</directory>
+		</virtualhost>
+        CONF
+	run 'sudo mv /tmp/gitlab.conf /etc/httpd/conf.d/gitlab.conf'
+
+	## /home/git/.ssh 関連の設定
+	run 'sudo chmod 700 /home/git/.ssh'
+	run 'sudo chmod 600 /home/git/.ssh/authorized_keys'
+end
+
+desc "Restore Data from Backuped file in S3 Buckets"
+task :do_dump_and_file_import do
+        # Clean Install の場合は Skip
+        if _RESTORE == 'NO'
+                next
+        end
+
+        # DB のリストア
+        db_mysql.operationalTask.do_dump_import
+
+        # File のリストア
+        awstool.do_tar_import
+end
+
+end	# End of namespace :gitlab
