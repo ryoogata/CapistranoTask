@@ -90,7 +90,7 @@ task :install_fswiki do
 
 	# Source の Download と展開
         unless remote_file_exists?("/tmp/wiki3_6_4.zip")
-		run "wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip'"
+		run "wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Fwiki3_6_4.zip' -O /tmp/wiki3_6_4.zip"
         end
         run 'unzip -q -n -d /tmp /tmp/wiki3_6_4.zip'
 
@@ -133,12 +133,12 @@ task :install_fswiki do
 	# パッチの適用
         run <<-CMD
 		# patch fswiki-patch-20110813 の適用
-		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Ffswiki-patch-20110813.zip' &&
+		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=jaist&f=%2Ffswiki%2F48737%2Ffswiki-patch-20110813.zip -O /tmp/fswiki-patch-20110813.zip' &&
 		unzip -q -d /tmp /tmp/fswiki-patch-20110813.zip &&
 		sudo cp /tmp/fswiki-patch-20110813/lib/Util.pm #{_MAIN_DIRECTORY}/lib &&
 	
 		# patch fswiki-pache-20110823 の適用
-		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=iij&f=%2Ffswiki%2F48737%2Ffswiki-pache-20110823.zip' &&
+		wget -P /tmp 'http://sourceforge.jp/frs/redir.php?m=iij&f=%2Ffswiki%2F48737%2Ffswiki-pache-20110823.zip -O /tmp/fswiki-pache-20110823.zip' &&
 		unzip -q -d /tmp /tmp/fswiki-pache-20110823.zip &&
 		sudo cp /tmp/fswiki-pache-20110823/lib/Wiki/InterWiki.pm #{_MAIN_DIRECTORY}/lib/Wiki/
 	CMD
