@@ -308,18 +308,4 @@ task :do_dump_and_file_import do
         awstool.do_tar_import
 end
 
-task :devtas do
-	# DB の Setup
-	run <<-CMD
-		# ユーザの追加
-		sudo echo "CREATE USER '#{_GITLAB_DB_USER}'@'localhost' IDENTIFIED BY '#{_GITLAB_DB_PASSWORD}'" | mysql -u root &&
-
-		# DB の作成
-		sudo echo  'CREATE DATABASE IF NOT EXISTS `#{_DB_NAME}` DEFAULT CHARACTER SET `utf8` COLLATE `utf8_unicode_ci`' | mysql -u root &&
-	
-		#
-		sudo echo 'GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `#{_DB_NAME}`.* TO \'#{_GITLAB_DB_USER}\'@\'localhost\'' | mysql -u root
-	CMD
-end
-
 end	# End of namespace :gitlab
