@@ -38,7 +38,7 @@ set :_ZABBIX_DB_USER, 'zabbix'
 set :_DB_NAME, 'zabbix'
 
 # インストールする Zabbix のバージョン
-set :_ZABBIX_VERSION, '2.0.4'
+set :_ZABBIX_VERSION, '2.0.6'
 
 # 下記 Attribute は config.rb に記載している
 # zabbix 用 DB パスワード
@@ -160,7 +160,7 @@ task :install_zabbix do
 	db_mysql.operationalTask.do_start
 
 	# Zabbix の Source の Download とコンパイル
-	run "wget -P /tmp 'http://downloads.sourceforge.net/project/zabbix/ZABBIX%20Latest%20Stable/#{_ZABBIX_VERSION}/zabbix-#{_ZABBIX_VERSION}.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fzabbix%2F&ts=1351499277&use_mirror=jaist'"
+	run "wget 'http://downloads.sourceforge.net/project/zabbix/ZABBIX%20Latest%20Stable/#{_ZABBIX_VERSION}/zabbix-#{_ZABBIX_VERSION}.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fzabbix%2F&ts=1351499277&use_mirror=jaist' -O /tmp/zabbix-#{_ZABBIX_VERSION}.tar.gz"
 	run "tar xzpf /tmp/zabbix-#{_ZABBIX_VERSION}.tar.gz -C /tmp"
 	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; ./configure --with-net-snmp --enable-server --enable-agent --with-mysql=/usr/lib64/mysql/mysql_config"
 	run "cd /tmp/zabbix-#{_ZABBIX_VERSION} ; make"
