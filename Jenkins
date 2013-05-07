@@ -1,0 +1,111 @@
+##########################################################################
+## Support.	AMI: amzn-ami-pv-2013.03.0.x86_64-ebs (ami-66d1fc23)
+## 		
+
+
+#############################################################################
+## Settins.
+load 'config.rb'
+load 'awstool'
+load 'sys_ntp'
+
+
+#############################################################################
+## Attribute.
+
+# バックアップを取得する Directory ( awstool:setup_backupconf )
+set :_BACKUP_DIRECTORY, '/var/lib/jenkins'
+
+# バックアップファイルを保存する s3 buckets
+set :_S3_BUCKETS_NAME, 'ogata_buckets/jenkins'
+
+# バックアップするファイル名の Prefix
+# バックアップファイルは Prefix + date の形式で保存される
+# ( e.g fswiki201210262316.tgz )
+set :_BACKUPED_FILE_PREFIX, 'jenkins'
+
+# 下記 Attribute は config.rb に記載している
+# set :_ACCESS_KEY
+# set :_SECRET_KEY
+
+# バックアップからリストアする/しないの選択
+# YES: リストアする, NO: リストアせず、クリーンインストールする
+set :_RESTORE, 'NO'
+
+
+#############################################################################
+namespace :serverTemplate do
+
+# Jenkins のインストール
+desc "Build Jenkins Server"
+task :install do
+	sys_ntp.setup_JST
+	awstool.setup_s3cmd
+	awstool.setup_backupconf
+	awstool.setup_backup_file_script
+	awstool.setup_shutdowntime_run_backupscript
+	awstool.do_tar_schedule_enable
+	jenkins.install_jenkins
+	jenkins.do_tar_restore
+	jenkins.operationalTask.do_start_jenkins
+end
+
+end # End of namespace :serverTemplate
+
+
+#############################################################################
+## TASKS.
+
+namespace :jenkins do
+
+
+### Operational Task ###
+
+namespace :operationalTask do
+
+desc "Start Jenkins Server"
+task :do_start_jenkins do
+        run 'sudo nohup /etc/init.d/jenkins start'
+end
+
+desc "Stop Jenkins Server"
+task :do_stop_jenkins do
+        run 'sudo nohup /etc/init.d/jenkins stop'
+end
+
+desc "Restart Jenkins Server"
+task :do_restart_jenkins do
+        run 'sudo nohup /etc/init.d/jenkins restart'
+end
+
+end # End of namespace :operationalTask do
+
+
+### Boot Task ###
+
+desc "install Jenkins"
+task :install_jenkins do
+	## レポジトリの登録
+	run 'sudo wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo'
+	run 'sudo rpm --import http://pkg.jenkins-ci.org/redhat/jenkins-ci.org.key'
+
+	## Jenkins のインストール
+	run <<-CMD
+		sudo yum -q -y install \
+			jenkins
+	CMD
+end
+
+
+desc "Restore Data from Backuped file in S3 Buckets"
+task :do_tar_restore do
+	# _RESTORE が NO の場合、task を skip
+	if _RESTORE == 'NO'
+		next
+	end
+
+	## S3 に保存しているデータを Download して展開
+	awstool.do_tar_import
+end
+
+end	# End of namespace :jenkins
