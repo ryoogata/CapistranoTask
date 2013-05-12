@@ -1,18 +1,22 @@
 #############################################################################
 ## ROLES.
-role :server, '設定したいサーバのFQDN or IP Address'
 
+role :server, 'localhost'
+#role :server, '設定したいサーバのFQDN or IP Address'
 
 set :user, 'ec2-user'
 #set :user, 'root'
-set :sudo_password, ''
 
+set :sudo_password, ''
 default_run_options[:pty] = true
 
-ssh_options[:keys] = %w(ローカルにある SSH の Key の指定)
+ssh_options[:keys] = %w(/home/ec2-user/.ssh/default-AWS-US-East.pem)
+#ssh_options[:keys] = %w(SSH の秘密鍵の指定)
+
 ssh_options[:auth_methods] = %w(publickey)
 
 set :use_sudo, true
+
 
 ##########################################################################
 ## Utilities.
