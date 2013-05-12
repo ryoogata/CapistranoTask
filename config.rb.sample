@@ -43,3 +43,10 @@ end
 Signal.trap(:INT) do
   abort "\n[cap] Inturrupted..."
 end
+
+
+#############################################################################
+## Attribute.
+
+set :_ACCESS_KEY, ''
+set :_SECRET_KEY, ''
