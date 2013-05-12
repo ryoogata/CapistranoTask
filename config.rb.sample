@@ -29,6 +29,11 @@ def remote_file_exists?(full_path)
   'true' ==  capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
 end
 
+# ファイルの内容に特定の文字列が含まれているか否かの確認
+def remote_file_include?(full_path,words)
+        return capture("cat #{full_path}").include?("#{words}")
+end
+
 # RPM パッケージのインストール状況確認 ( インストールされていない場合 true を返す )
 def package_not_install?(package)
   return capture("rpm -ql #{package} || :").include?("is not installed")
