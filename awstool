@@ -109,6 +109,19 @@ task :setup_pem_root do
 end
 
 
+# スワップ領域を作成し mount
+desc "Setup Swap"
+task :setup_swap do
+	run <<-CMD
+		sudo dd if=/dev/zero of=/swap.img bs=1M count=2408 &&
+		sudo chmod 600 /swap.img &&
+		sudo mkswap /swap.img &&
+		sudo sh -c 'echo "/swap.img /dev/null swap defaults 0 2" >> /etc/fstab' &&
+		sudo swapon -ae
+	CMD
+end
+
+
 # s3fs のセットアップ
 # ( 本家の s3fs だと s3 のディレクトリが見えないバグがあるので、cloudpack の修正版を利用 )
 desc "Install s3fs & setup"
