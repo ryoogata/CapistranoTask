@@ -33,6 +33,18 @@ task :setup_rpmforge do
 	end
 end
 
+# Remi レポジトリのインストール
+desc "Setup CentOS Remi Repository ( x86_64 )"
+task :setup_remi do
+
+	# パッケージがインストールされていない場合はインストール
+	if package_not_install?("remi-release")
+		run <<-CMD
+			sudo rpm -Uv http://rpms.famillecollet.com/enterprise/remi-release-6.rpm
+		CMD
+	end
+end
+
 
 # treasure-data.com レポジトリのインストール
 desc "Setup treasuredata Repository"
