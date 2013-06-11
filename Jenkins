@@ -93,6 +93,9 @@ task :install_jenkins do
 	run <<-CMD
 		sudo yum -q -y install \
 			jenkins
+			patch gcc-c++ patch readline-devel zlib-devel libyaml-devel libffi-devel openssl-devel autoconf automake libtool bison libxml2-devel libxslt-devel \
+			java ant ant-junit \
+			rubygems ruby-devel git
 	CMD
 
 	## selenium-webdriver のインストール
