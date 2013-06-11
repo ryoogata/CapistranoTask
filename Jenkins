@@ -94,6 +94,16 @@ task :install_jenkins do
 		sudo yum -q -y install \
 			jenkins
 	CMD
+
+	## selenium-webdriver のインストール
+	run 'sudo /usr/bin/gem install selenium-webdriver --no-ri --no-rdoc'
+
+	## selenium-client のインストール
+	run 'sudo /usr/bin/gem install selenium-client --no-ri --no-rdoc'
+
+	## rspec のインストール
+	run 'sudo /usr/bin/gem install rspec --no-ri --no-rdoc'
+
 end
 
 
