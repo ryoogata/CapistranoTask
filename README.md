@@ -60,7 +60,8 @@ Usage
 3. 設定ファイルの rename  
   $ __mv config.rb.sample config.rb__  
 
-4. __config.rb__ の編集
+4. __config.rb__ の編集  
+
  - __role :server__    
  capistrano を利用して操作したいサーバの FQDN もしくは IP Address を入力します。  
  Default では localhost が指定されています。  
@@ -75,7 +76,7 @@ Usage
  - __ssh\_options[:auth_methods]__  
  操作対象サーバへ SSH ログインする方法を鍵認証に指定しています。パスワード認証によるログインを行う場合には本設定を削除もしくはコメントアウトしてください。
 
-5. cap コマンドの実行  
+5\. cap コマンドの実行  
 下記のように cap コマンドを利用して -f の引数にファイル名とそのあとに実行したい Task を入力します。  
     
   $ __cap -f Zabbix serverTemplate:install__
